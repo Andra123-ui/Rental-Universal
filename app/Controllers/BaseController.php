@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Controllers;
+protected $helpers = ['url', 'form', 'site'];
 
 use CodeIgniter\Controller;
 use CodeIgniter\HTTP\RequestInterface;
