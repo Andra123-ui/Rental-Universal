@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Controllers;
-protected $helpers = ['url', 'form', 'site'];
 
 use CodeIgniter\Controller;
 use CodeIgniter\HTTP\RequestInterface;
@@ -26,7 +25,8 @@ abstract class BaseController extends Controller
      * The creation of dynamic property is deprecated in PHP 8.2.
      */
 
-    // protected $session;
+    // Deklarasi helpers diletakkan di dalam class
+    protected $helpers = ['url', 'form', 'site'];
 
     /**
      * @return void

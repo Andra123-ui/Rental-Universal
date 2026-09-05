@@ -10,7 +10,7 @@ class Home extends BaseController
     public function index()
     {
         $categoryModel = new CategoryModel();
-        $catalogModel  = new CatalogItemModel();
+        $catalogModel = new CatalogItemModel();
 
         $categories = $categoryModel
             ->where('parent_id', null)
@@ -24,9 +24,9 @@ class Home extends BaseController
             ->findAll(6);
 
         return view('pub/landing', [
-            'categories'   => $categories,
+            'categories' => $categories,
             'catalogItems' => $catalogItems,
-            'unitLabels'   => unit_labels(),
+            'unitLabels' => function_exists('unit_labels') ? unit_labels() : [],
         ]);
     }
 }
