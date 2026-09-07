@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\CategoryModel;
 use App\Models\CatalogItemModel;
+use App\Models\ItemMediaModel;
 
 class Home extends BaseController
 {
@@ -11,6 +12,7 @@ class Home extends BaseController
     {
         $categoryModel = new CategoryModel();
         $catalogModel = new CatalogItemModel();
+        $mediaModel = new model();
 
         $categories = $categoryModel
             ->where('parent_id', null)
@@ -23,10 +25,13 @@ class Home extends BaseController
             ->orderBy('created_at', 'DESC')
             ->findAll(6);
 
+        $itemIds = array_column($catalogItems, 'id');
+        $imageMap = $mediaModel->getPrimaryImageMap($itemIds);
+
         return view('pub/landing', [
             'categories' => $categories,
             'catalogItems' => $catalogItems,
-            'unitLabels' => function_exists('unit_labels') ? unit_labels() : [],
+            'imageMap' => $imageMap,
         ]);
     }
 }

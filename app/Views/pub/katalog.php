@@ -1,70 +1,134 @@
-<?= view('partials/header', ['title' => 'Katalog']) ?>
+<?php
 
-<div class="page-banner">
-  <div class="wrap">
-    <div class="crumb"><a href="<?= base_url('/') ?>">Beranda</a> / Katalog</div>
-    <h1>Katalog Sewa</h1>
-  </div>
-</div>
+namespace App\Controllers;
 
-<div class="wrap">
-  <form method="get" action="<?= base_url('/katalog') ?>" class="filters-bar">
-    <div class="search-field">
-      <label>Cari</label>
-      <input type="text" name="q" value="<?= esc($keyword ?? '') ?>" placeholder="Nama produk atau jasa">
-    </div>
-    <div class="search-field">
-      <label>Kategori</label>
-      <select name="kategori">
-        <option value="">Semua kategori</option>
-        <?php foreach ($categories as $cat): ?>
-          <option value="<?= esc($cat['slug']) ?>" <?= $kategori === $cat['slug'] ? 'selected' : '' ?>><?= esc($cat['name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    </div>
-    <div class="search-field">
-      <label>Urutkan</label>
-      <select name="sort">
-        <option value="terbaru" <?= $sort === 'terbaru' ? 'selected' : '' ?>>Terbaru</option>
-        <option value="harga-terendah" <?= $sort === 'harga-terendah' ? 'selected' : '' ?>>Harga terendah</option>
-        <option value="harga-tertinggi" <?= $sort === 'harga-tertinggi' ? 'selected' : '' ?>>Harga tertinggi</option>
-      </select>
-    </div>
-    <button type="submit" class="btn btn-primary">Terapkan</button>
-  </form>
+use App\Models\CatalogItemModel;
+use App\Models\CategoryModel;
+use App\Models\ItemMediaModel;
 
-  <div class="card-grid" style="margin-bottom:40px;">
-    <?php if (empty($items)): ?>
-      <div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
-        <h3>Tidak ada produk ditemukan</h3>
-        <p>Coba ubah kata kunci/kategori, atau tambahkan produk lewat dashboard admin.</p>
-      </div>
-    <?php else: ?>
-      <?php foreach ($items as $item):
-        $unit = $unitLabels[$item['pricing_unit']] ?? strtolower($item['pricing_unit']);
-      ?>
-        <div class="item-card">
-          <div class="item-media">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13.5" r="3.2"/></svg>
-          </div>
-          <div class="item-body">
-            <span class="item-type"><?= esc($item['item_type']) ?></span>
-            <h3><?= esc($item['name']) ?></h3>
-            <p><?= esc(mb_strimwidth($item['description'] ?? 'Detail lengkap tersedia di halaman produk.', 0, 90, '...')) ?></p>
-            <div class="item-footer">
-              <div class="item-price">Rp<?= number_format($item['base_price'], 0, ',', '.') ?> <small>/ <?= esc($unit) ?></small></div>
-              <a href="<?= base_url('/katalog/' . $item['id']) ?>" class="btn btn-outline" style="padding:8px 14px;font-size:0.85rem;">Detail</a>
-            </div>
-          </div>
-        </div>
-      <?php endforeach; ?>
-    <?php endif; ?>
-  </div>
+class Katalog extends BaseController
+{
+  public function index()
+  {
+    $catalogModel = new CatalogItemModel();
+    $categoryModel = new CategoryModel();
 
-  <?php if (! empty($items)): ?>
-    <div style="display:flex;justify-content:center;margin-bottom:60px;"><?= $pager->links() ?></div>
-  <?php endif; ?>
-</div>
+    $kategori = $this->request->getGet('kategori');
+    $keyword = $this->request->getGet('q');
+    $sort = $this->request->getGet('sort') ?? 'terbaru';
+    $page = (int) ($this->request->getGet('page') ?? 1);
+    $perPage = 9;
 
-<?= view('partials/footer') ?>
+    $builder = $catalogModel->where('status', 'ACTIVE');
+
+    if (!empty($kategori)) {
+      $cat = $categoryModel->where('slug', $kategori)->first();
+      if ($cat) {
+        $builder = $builder->where('category_id', $cat['id']);
+      }
+    }
+
+    if (!empty($keyword)) {
+      $builder = $builder->groupStart()
+        ->like('name', $keyword)
+        ->orLike('description', $keyword)
+        ->groupEnd();
+    }
+
+    switch ($sort) {
+      case 'harga_rendah':
+        $builder = $builder->orderBy('base_price', 'ASC');
+        break;
+      case 'harga_tinggi':
+        $builder = $builder->orderBy('base_price', 'DESC');
+        break;
+      default:
+        $builder = $builder->orderBy('created_at', 'DESC');
+    }
+
+    $catalogItems = $builder->paginate($perPage, 'default', $page);
+    $pager = $catalogModel->pager;
+
+    $categories = $categoryModel
+      ->where('is_active', 1)
+      ->orderBy('sort_order', 'ASC')
+      ->findAll();
+
+    $mediaModel = new ItemMediaModel();
+    $itemIds = array_column($catalogItems, 'id');
+    $imageMap = $mediaModel->getPrimaryImageMap($itemIds);
+
+    return view('pub/katalog', [
+      'catalogItems' => $catalogItems,
+      'categories' => $categories,
+      'pager' => $pager,
+      'activeKategori' => $kategori,
+      'keyword' => $keyword,
+      'sort' => $sort,
+      'imageMap' => $imageMap,
+    ]);
+  }
+
+  public function detail(int $id)
+  {
+    $catalogModel = new CatalogItemModel();
+    $categoryModel = new CategoryModel();
+    $mediaModel = new ItemMediaModel();
+
+    $item = $catalogModel->find($id);
+
+    if (!$item || $item['status'] !== 'ACTIVE') {
+      throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+    }
+
+    $category = $categoryModel->find($item['category_id']);
+
+    $related = $catalogModel
+      ->where('category_id', $item['category_id'])
+      ->where('status', 'ACTIVE')
+      ->where('id !=', $item['id'])
+      ->limit(3)
+      ->findAll();
+
+    $gallery = $mediaModel->getGallery($id);
+    $relatedIds = array_column($related, 'id');
+    $relatedImages = $mediaModel->getPrimaryImageMap($relatedIds);
+
+    return view('pub/katalog_detail', [
+      'item' => $item,
+      'category' => $category,
+      'related' => $related,
+      'gallery' => $gallery,
+      'relatedImages' => $relatedImages,
+    ]);
+  }
+
+  /**
+   * PUB-05: Cek Ketersediaan (AJAX, JSON response)
+   * Cek overlap terhadap booking_resource_allocations aktif untuk item ini.
+   */
+  public function cekTersedia(int $catalogItemId)
+  {
+    $startAt = $this->request->getGet('start_at');
+    $endAt = $this->request->getGet('end_at');
+
+    if (empty($startAt) || empty($endAt)) {
+      return $this->response->setJSON(['available' => false, 'message' => 'Tanggal tidak lengkap']);
+    }
+
+    $db = \Config\Database::connect();
+
+    // Overlap: requested_start < existing_end AND requested_end > existing_start
+    $conflict = $db->table('booking_resource_allocations bra')
+      ->join('booking_items bi', 'bi.id = bra.booking_item_id')
+      ->where('bi.catalog_item_id', $catalogItemId)
+      ->whereIn('bra.status', ['RESERVED', 'IN_USE'])
+      ->where('bra.start_at <', $endAt)
+      ->where('bra.end_at >', $startAt)
+      ->countAllResults();
+
+    return $this->response->setJSON([
+      'available' => $conflict === 0,
+    ]);
+  }
+}

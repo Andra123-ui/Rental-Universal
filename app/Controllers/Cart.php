@@ -6,67 +6,89 @@ use App\Models\CatalogItemModel;
 
 class Cart extends BaseController
 {
+    protected const SESSION_KEY = 'rental_cart';
+
     public function index()
     {
+        $cart = session()->get(self::SESSION_KEY) ?? [];
+        $catalogModel = new CatalogItemModel();
+        $items = [];
+        $subtotal = 0;
+
+        foreach ($cart as $key => $line) {
+            $product = $catalogModel->find($line['catalog_item_id']);
+            if (!$product) {
+                continue;
+            }
+
+            $unit = $product['base_price'] * $line['qty'];
+            $subtotal += $unit;
+
+            $items[] = [
+                'key' => $key,
+                'product' => $product,
+                'qty' => $line['qty'],
+                'start_at' => $line['start_at'],
+                'end_at' => $line['end_at'],
+                'line_total' => $unit,
+            ];
+        }
+
         return view('pub/keranjang', [
-            'cart'       => session()->get('cart') ?? [],
-            'unitLabels' => unit_labels(),
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'unitLabels' => function_exists('unit_labels') ? unit_labels() : [],
         ]);
     }
 
     public function tambah()
     {
-        $catalogModel = new CatalogItemModel();
-        $itemId  = $this->request->getPost('catalog_item_id');
-        $qty     = max(1, (int) $this->request->getPost('qty'));
+        $catalogItemId = $this->request->getPost('catalog_item_id');
         $startAt = $this->request->getPost('start_at');
-        $endAt   = $this->request->getPost('end_at');
+        $endAt = $this->request->getPost('end_at');
+        $qty = max(1, (int) $this->request->getPost('qty'));
 
-        $item = $catalogModel->find($itemId);
-        if (! $item) {
-            return redirect()->back()->with('error', 'Produk tidak ditemukan.');
+        $catalogModel = new CatalogItemModel();
+        $product = $catalogModel->find($catalogItemId);
+
+        if (!$product) {
+            return redirect()->back()->with('error', 'Item tidak ditemukan.');
         }
 
-        $cart = session()->get('cart') ?? [];
-        $cart[$itemId] = [
-            'catalog_item_id' => $item['id'],
-            'name'            => $item['name'],
-            'unit_price'      => $item['base_price'],
-            'pricing_unit'    => $item['pricing_unit'],
-            'qty'             => $qty,
-            'start_at'        => $startAt,
-            'end_at'          => $endAt,
-            'subtotal'        => $item['base_price'] * $qty,
+        $cart = session()->get(self::SESSION_KEY) ?? [];
+        $key = $catalogItemId . '_' . md5($startAt . $endAt);
+
+        $cart[$key] = [
+            'catalog_item_id' => $catalogItemId,
+            'start_at' => $startAt,
+            'end_at' => $endAt,
+            'qty' => $qty,
         ];
 
-        session()->set('cart', $cart);
+        session()->set(self::SESSION_KEY, $cart);
 
-        return redirect()->to('/keranjang')->with('success', 'Ditambahkan ke keranjang.');
+        return redirect()->to('/keranjang')->with('success', 'Item berhasil ditambahkan ke keranjang.');
     }
 
     public function update()
     {
-        $cart = session()->get('cart') ?? [];
-        $qtys = $this->request->getPost('qty') ?? [];
+        $key = $this->request->getPost('key');
+        $qty = max(1, (int) $this->request->getPost('qty'));
 
-        foreach ($qtys as $itemId => $qty) {
-            if (isset($cart[$itemId])) {
-                $qty = max(1, (int) $qty);
-                $cart[$itemId]['qty']      = $qty;
-                $cart[$itemId]['subtotal'] = $cart[$itemId]['unit_price'] * $qty;
-            }
+        $cart = session()->get(self::SESSION_KEY) ?? [];
+        if (isset($cart[$key])) {
+            $cart[$key]['qty'] = $qty;
+            session()->set(self::SESSION_KEY, $cart);
         }
 
-        session()->set('cart', $cart);
-
-        return redirect()->to('/keranjang')->with('success', 'Keranjang diperbarui.');
+        return redirect()->to('/keranjang')->with('success', 'Jumlah item diperbarui.');
     }
 
-    public function hapus($itemId)
+    public function hapus(string $key)
     {
-        $cart = session()->get('cart') ?? [];
-        unset($cart[$itemId]);
-        session()->set('cart', $cart);
+        $cart = session()->get(self::SESSION_KEY) ?? [];
+        unset($cart[$key]);
+        session()->set(self::SESSION_KEY, $cart);
 
         return redirect()->to('/keranjang')->with('success', 'Item dihapus dari keranjang.');
     }
