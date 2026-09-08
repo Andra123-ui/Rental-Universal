@@ -21,3 +21,23 @@ $routes->post('/checkout/proses', 'Checkout::proses');
 $routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1');
 
 $routes->get('/cek-booking', 'CekBooking::index');
+
+
+
+
+/**
+ * Tambahkan blok ini ke app/Config/Routes.php (di luar admin group).
+ * Sesuai spec: MVP route = GET /account/login
+ */
+
+$routes->group('account', ['namespace' => 'App\Controllers\Customer'], static function ($routes) {
+    // CAUTH-01
+    $routes->get('login', 'AuthController::login');
+    $routes->post('login/send-otp', 'AuthController::sendOtp');
+
+    // CAUTH-02 — route persis /account/verify sesuai spec
+    $routes->get('verify', 'AuthController::verifyForm');
+    $routes->post('verify', 'AuthController::verifyOtp');
+    $routes->post('verify/resend', 'AuthController::resendOtp');
+    $routes->get('verify/change-phone', 'AuthController::changePhone');
+});

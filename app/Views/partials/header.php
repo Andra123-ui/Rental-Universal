@@ -244,7 +244,7 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
     }
 
     .search-card {
-      margin-top: -34px;
+      margin-top: 25px;
       position: relative;
       z-index: 5;
       background: var(--ink);

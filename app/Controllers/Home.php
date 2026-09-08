@@ -12,7 +12,7 @@ class Home extends BaseController
     {
         $categoryModel = new CategoryModel();
         $catalogModel = new CatalogItemModel();
-        $mediaModel = new model();
+        $mediaModel = new ItemMediaModel();
 
         $categories = $categoryModel
             ->where('parent_id', null)
