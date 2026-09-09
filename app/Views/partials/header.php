@@ -16,14 +16,14 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
     rel="stylesheet">
   <style>
     :root {
-      --ink: #172321;
-      --paper: #EFF1EA;
+      --ink: #0F1B3D;
+      --paper: #F0F4FC;
       --surface: #FFFFFF;
-      --accent: #C1552C;
-      --accent-soft: #F1DACB;
-      --brass: #A98346;
-      --line: #D9D4C6;
-      --muted: #5C6660;
+      --accent: #1E56E8;
+      --accent-soft: #DCE7FF;
+      --brass: #FF7A45;
+      --line: #D9E2F5;
+      --muted: #5B6B8C;
       --radius: 6px;
       --maxw: 1180px;
     }
@@ -1072,6 +1072,110 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
 
     .promo-card a {
       align-self: flex-start;
+    }
+
+    /* Bar Statistik (biru, mirip referensi) */
+    .stats-bar {
+      background: var(--ink);
+      color: #fff;
+      padding: 0 0 48px;
+    }
+
+    .stats-intro {
+      padding: 56px 0 32px;
+      max-width: 600px;
+    }
+
+    .stats-intro .eyebrow {
+      color: var(--brass);
+    }
+
+    .stats-intro h2 {
+      color: #fff;
+      font-size: 1.9rem;
+    }
+
+    .stats-intro h2 span {
+      color: var(--brass);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 32px 20px;
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .stat-item:last-child {
+      border-right: none;
+    }
+
+    .stat-item .num {
+      font-family: 'Fraunces', serif;
+      font-size: 2.3rem;
+      color: var(--brass);
+    }
+
+    .stat-item .label {
+      font-size: 0.85rem;
+      color: #C9D4EE;
+      margin-top: 6px;
+    }
+
+    /* Banner gradient CTA (mirip pita warna-warni di referensi) */
+    .gradient-banner {
+      background: linear-gradient(120deg, var(--accent), #5B8CFF 45%, var(--brass));
+      border-radius: var(--radius);
+      padding: 40px 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      color: #fff;
+    }
+
+    .gradient-banner h3 {
+      color: #fff;
+      font-size: 1.4rem;
+      max-width: 26ch;
+    }
+
+    .gradient-banner p {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9rem;
+      margin-top: 8px;
+      max-width: 40ch;
+    }
+
+    .gradient-banner .btn-light {
+      color: var(--ink);
+    }
+
+    @media (max-width:880px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stat-item {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .stat-item:last-child {
+        border-bottom: none;
+      }
+
+      .gradient-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+      }
     }
 
     @media (max-width:880px) {
