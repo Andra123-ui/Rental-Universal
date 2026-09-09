@@ -40,7 +40,7 @@ $bizAddr = $biz['address'] ?? 'Alamat usaha Anda akan tampil di sini';
                 <h3>Kenapa booking di sini lebih berbeda?</h3>
                 <p>Ketersediaan real-time, invoice otomatis, dan tanpa ribet bikin akun untuk mulai transaksi.</p>
             </div>
-            <a href="<?= base_url('/katalog') ?>" class="btn btn-light">Mulai Booking</a>
+            <a href="<?= base_url('/catalog') ?>" class="btn btn-light">Mulai Booking</a>
         </div>
     </div>
 </section>
@@ -94,48 +94,54 @@ $bizAddr = $biz['address'] ?? 'Alamat usaha Anda akan tampil di sini';
     </div>
 </footer>
 <script>
-    document.querySelectorAll('.nav-toggle').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelector('.nav-links').classList.toggle('nav-open');
-        });
-
-        // Scroll reveal
-        const revealEls = document.querySelectorAll('.reveal');
-        const revealObserver = new IntersectionObserver((entries) => {
-            entries.forEach(e => {
-                if (e.isIntersecting) {
-                    e.target.classList.add('in-view');
-                    revealObserver.unobserve(e.target);
-                }
-            });
-        }, { threshold: 0.15 });
-        revealEls.forEach(el => revealObserver.observe(el));
-
-        // Counter animation
-        const counters = document.querySelectorAll('.counter-item .num[data-target]');
-        const counterObserver = new IntersectionObserver((entries) => {
-            entries.forEach(e => {
-                if (e.isIntersecting) {
-                    const el = e.target;
-                    const target = parseInt(el.dataset.target, 10);
-                    const suffix = el.dataset.suffix || '';
-                    let current = 0;
-                    const step = Math.max(1, Math.ceil(target / 60));
-                    const tick = () => {
-                        current += step;
-                        if (current >= target) { el.textContent = target + suffix; return; }
-                        el.textContent = current + suffix;
-                        requestAnimationFrame(tick);
-                    };
-                    tick();
-                    counterObserver.unobserve(el);
-                }
-            });
-        }, { threshold: 0.5 });
-        counters.forEach(el => counterObserver.observe(el));
-
+document.querySelectorAll('.nav-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelector('.nav-links').classList.toggle('nav-open');
     });
 
+    // Scroll reveal
+    const revealEls = document.querySelectorAll('.reveal');
+    const revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                e.target.classList.add('in-view');
+                revealObserver.unobserve(e.target);
+            }
+        });
+    }, {
+        threshold: 0.15
+    });
+    revealEls.forEach(el => revealObserver.observe(el));
+
+    // Counter animation
+    const counters = document.querySelectorAll('.counter-item .num[data-target]');
+    const counterObserver = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                const el = e.target;
+                const target = parseInt(el.dataset.target, 10);
+                const suffix = el.dataset.suffix || '';
+                let current = 0;
+                const step = Math.max(1, Math.ceil(target / 60));
+                const tick = () => {
+                    current += step;
+                    if (current >= target) {
+                        el.textContent = target + suffix;
+                        return;
+                    }
+                    el.textContent = current + suffix;
+                    requestAnimationFrame(tick);
+                };
+                tick();
+                counterObserver.unobserve(el);
+            }
+        });
+    }, {
+        threshold: 0.5
+    });
+    counters.forEach(el => counterObserver.observe(el));
+
+});
 </script>
 </body>
 
