@@ -58,8 +58,8 @@ $bizAddr = $biz['address'] ?? 'Alamat usaha Anda akan tampil di sini';
             <div>
                 <h4>Tautan</h4>
                 <ul>
-                    <li><a href="<?= base_url('/katalog') ?>">Katalog</a></li>
-                    <li><a href="<?= base_url('/keranjang') ?>">Keranjang</a></li>
+                    <li><a href="<?= base_url('/catalog') ?>">Katalog</a></li>
+                    <li><a href="<?= base_url('/cart') ?>">Keranjang</a></li>
                     <li><a href="<?= base_url('/cek-booking') ?>">Cek Booking</a></li>
                     <li><a href="/account/login">Akun Saya</a></li>
                 </ul>
@@ -94,11 +94,11 @@ $bizAddr = $biz['address'] ?? 'Alamat usaha Anda akan tampil di sini';
     </div>
 </footer>
 <script>
-    document.querySelectorAll('.nav-toggle').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelector('.nav-links').classList.toggle('nav-open');
-        });
+document.querySelectorAll('.nav-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.querySelector('.nav-links').classList.toggle('nav-open');
     });
+});
 </script>
 </body>
 
