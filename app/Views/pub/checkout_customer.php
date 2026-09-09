@@ -5,8 +5,8 @@
 
 <div class="page-banner">
     <div class="wrap">
-        <div class="crumb"><a href="<?= base_url('/') ?>">Beranda</a> / <a
-                href="<?= base_url('/keranjang') ?>">Keranjang</a> / Data Penyewa</div>
+        <div class="crumb"><a href="<?= base_url('/') ?>">Beranda</a> / <a href="<?= base_url('/cart') ?>">Keranjang</a>
+            / Data Penyewa</div>
         <h1>Data Penyewa</h1>
     </div>
 </div>
@@ -22,32 +22,32 @@
         </div>
 
         <?php if (session()->getFlashdata('errors')): ?>
-            <div class="alert-box alert-warn">
-                <?php foreach (session()->getFlashdata('errors') as $err): ?>
-                    <div>
-                        <?= esc($err) ?>
-                    </div>
-                <?php endforeach; ?>
+        <div class="alert-box alert-warn">
+            <?php foreach (session()->getFlashdata('errors') as $err): ?>
+            <div>
+                <?= esc($err) ?>
             </div>
+            <?php endforeach; ?>
+        </div>
         <?php endif; ?>
 
         <div class="detail-grid">
             <div>
                 <?php if ($loggedCustomer): ?>
-                    <div class="alert-box alert-success">
-                        Anda masuk sebagai <strong>
-                            <?= esc($loggedCustomer['name']) ?>
-                        </strong> (
-                        <?= esc($loggedCustomer['phone']) ?>).
-                        Data di bawah otomatis terisi dari akun Anda.
-                    </div>
+                <div class="alert-box alert-success">
+                    Anda masuk sebagai <strong>
+                        <?= esc($loggedCustomer['name']) ?>
+                    </strong> (
+                    <?= esc($loggedCustomer['phone']) ?>).
+                    Data di bawah otomatis terisi dari akun Anda.
+                </div>
                 <?php else: ?>
-                    <div class="alert-box alert-info">
-                        Anda dapat memesan sebagai <strong>tamu</strong> tanpa login, atau
-                        <a href="/account/login?redirect=/checkout" style="font-weight:600;color:var(--accent);">masuk
-                            dengan OTP WhatsApp</a>
-                        supaya riwayat booking otomatis tersimpan di akun Anda.
-                    </div>
+                <div class="alert-box alert-info">
+                    Anda dapat memesan sebagai <strong>tamu</strong> tanpa login, atau
+                    <a href="/account/login?redirect=/checkout" style="font-weight:600;color:var(--accent);">masuk
+                        dengan OTP WhatsApp</a>
+                    supaya riwayat booking otomatis tersimpan di akun Anda.
+                </div>
                 <?php endif; ?>
 
                 <form method="post" action="<?= base_url('/checkout/simpan-customer') ?>">

@@ -22,7 +22,7 @@ class Checkout extends BaseController
     {
         $cart = session()->get(self::CART_KEY) ?? [];
         if (empty($cart)) {
-            return redirect()->to('/keranjang')->with('error', 'Keranjang Anda masih kosong.');
+            return redirect()->to('/cart')->with('error', 'Keranjang Anda masih kosong.');
         }
 
         // Kalau customer sudah login via OTP, prefill data
@@ -152,7 +152,7 @@ class Checkout extends BaseController
         $cart = session()->get(self::CART_KEY) ?? [];
 
         if (empty($checkoutData['customer']) || empty($checkoutData['fulfillment']) || empty($cart)) {
-            return redirect()->to('/keranjang')->with('error', 'Data booking tidak lengkap. Silakan ulangi.');
+            return redirect()->to('/cart')->with('error', 'Data booking tidak lengkap. Silakan ulangi.');
         }
 
         if (!$this->request->is('post')) {

@@ -21,7 +21,7 @@ helper('image');
 
 <section style="padding-top:0;">
     <div class="wrap">
-        <form class="filters-bar" method="get" action="<?= base_url('/katalog') ?>">
+        <form class="filters-bar" method="get" action="<?= base_url('/catalog') ?>">
             <div class="search-field">
                 <label for="f-kategori">Kategori</label>
                 <select id="f-kategori" name="kategori">
@@ -50,7 +50,7 @@ helper('image');
             </div>
             <button type="submit" class="btn btn-primary">Terapkan</button>
             <?php if (!empty($activeKategori) || !empty($keyword)): ?>
-            <a href="<?= base_url('/katalog') ?>" class="btn btn-outline">Reset</a>
+            <a href="<?= base_url('/catalog') ?>" class="btn btn-outline">Reset</a>
             <?php endif; ?>
         </form>
 
@@ -88,7 +88,7 @@ helper('image');
                                 <?= esc($item['unit_label']) ?>
                             </small>
                         </div>
-                        <a href="<?= base_url('/katalog/' . $item['id']) ?>" class="btn btn-outline"
+                        <a href="<?= base_url('/item/' . $item['id']) ?>" class="btn btn-outline"
                             style="padding:8px 14px;font-size:0.85rem;">Detail</a>
                     </div>
                 </div>

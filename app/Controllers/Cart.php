@@ -67,7 +67,7 @@ class Cart extends BaseController
 
         session()->set(self::SESSION_KEY, $cart);
 
-        return redirect()->to('/keranjang')->with('success', 'Item berhasil ditambahkan ke keranjang.');
+        return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
     }
 
     public function update()
@@ -81,7 +81,7 @@ class Cart extends BaseController
             session()->set(self::SESSION_KEY, $cart);
         }
 
-        return redirect()->to('/keranjang')->with('success', 'Jumlah item diperbarui.');
+        return redirect()->to('/cart')->with('success', 'Jumlah item diperbarui.');
     }
 
     public function hapus(string $key)
@@ -90,6 +90,6 @@ class Cart extends BaseController
         unset($cart[$key]);
         session()->set(self::SESSION_KEY, $cart);
 
-        return redirect()->to('/keranjang')->with('success', 'Item dihapus dari keranjang.');
+        return redirect()->to('/cart')->with('success', 'Item dihapus dari keranjang.');
     }
 }
