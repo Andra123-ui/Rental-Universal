@@ -16,16 +16,17 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
     rel="stylesheet">
   <style>
     :root {
-      --ink: #0F1B3D;
-      --paper: #F0F4FC;
+      --ink: #0A1633;
+      --paper: #F4F7FE;
       --surface: #FFFFFF;
-      --accent: #1E56E8;
-      --accent-soft: #DCE7FF;
+      --accent: #2456F5;
+      --accent2: #38BDF8;
+      --accent-soft: #E4ECFF;
       --brass: #FF7A45;
-      --line: #D9E2F5;
-      --muted: #5B6B8C;
-      --radius: 6px;
-      --maxw: 1180px;
+      --line: #E1E7F5;
+      --muted: #5C6785;
+      --radius: 10px;
+      --maxw: 1200px;
     }
 
     * {
@@ -1157,6 +1158,229 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
       color: var(--ink);
     }
 
+    /* ===== ANIMASI & POLISH PREMIUM ===== */
+
+    /* Scroll reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity .7s cubic-bezier(.16, 1, .3, 1), transform .7s cubic-bezier(.16, 1, .3, 1);
+    }
+
+    .reveal.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1.in-view {
+      transition-delay: .08s;
+    }
+
+    .reveal-delay-2.in-view {
+      transition-delay: .16s;
+    }
+
+    .reveal-delay-3.in-view {
+      transition-delay: .24s;
+    }
+
+    .reveal-delay-4.in-view {
+      transition-delay: .32s;
+    }
+
+    /* Hero gradient mesh animasi */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 96px 0 60px;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: -20% -10%;
+      z-index: 0;
+      background:
+        radial-gradient(38% 45% at 15% 20%, rgba(36, 86, 245, 0.14), transparent 70%),
+        radial-gradient(32% 40% at 85% 15%, rgba(56, 189, 248, 0.16), transparent 70%),
+        radial-gradient(30% 35% at 70% 85%, rgba(255, 122, 69, 0.10), transparent 70%);
+      animation: meshFloat 14s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    @keyframes meshFloat {
+      0% {
+        transform: translate(0, 0) scale(1);
+      }
+
+      100% {
+        transform: translate(-2%, 3%) scale(1.06);
+      }
+    }
+
+    .hero .wrap {
+      position: relative;
+      z-index: 1;
+    }
+
+    .eyebrow-free h1 {
+      background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 60%, var(--accent2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* Tombol shine sweep */
+    .btn {
+      position: relative;
+      overflow: hidden;
+      transition: transform .25s ease, box-shadow .25s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(120deg, var(--accent), var(--accent2));
+      box-shadow: 0 8px 20px -8px rgba(36, 86, 245, 0.55);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 28px -10px rgba(36, 86, 245, 0.6);
+    }
+
+    .btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -60%;
+      width: 40%;
+      height: 100%;
+      background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+      transform: skewX(-20deg);
+    }
+
+    .btn:hover::after {
+      animation: shine .8s ease forwards;
+    }
+
+    @keyframes shine {
+      from {
+        left: -60%;
+      }
+
+      to {
+        left: 130%;
+      }
+    }
+
+    /* Kartu hover-lift + zoom foto */
+    .cat-card,
+    .item-card,
+    .pcard {
+      transition: transform .35s cubic-bezier(.16, 1, .3, 1), box-shadow .35s ease, border-color .35s ease;
+    }
+
+    .cat-card:hover,
+    .item-card:hover,
+    .pcard:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 22px 40px -18px rgba(10, 22, 51, 0.25);
+      border-color: var(--accent);
+    }
+
+    .item-media,
+    .pcard .thumb,
+    .cat-card-img {
+      transition: transform .5s ease;
+      overflow: hidden;
+    }
+
+    .item-card:hover .item-media,
+    .pcard:hover .thumb {
+      transform: scale(1.08);
+    }
+
+    /* Icon ring pulse */
+    .quicknav-item .ic,
+    .trust-item .ic,
+    .cat-card .icon {
+      position: relative;
+    }
+
+    .quicknav-item:hover .ic,
+    .trust-item:hover .ic {
+      animation: pulseRing 1s ease;
+    }
+
+    @keyframes pulseRing {
+      0% {
+        box-shadow: 0 0 0 0 rgba(36, 86, 245, 0.35);
+      }
+
+      100% {
+        box-shadow: 0 0 0 14px rgba(36, 86, 245, 0);
+      }
+    }
+
+    /* Counter section */
+    .counter-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .counter-item {
+      text-align: center;
+      padding: 28px 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .counter-item .num {
+      font-family: 'Fraunces', serif;
+      font-size: 2.1rem;
+      background: linear-gradient(120deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .counter-item .label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Loading shimmer (opsional, untuk gambar yang lambat load) */
+    .thumb,
+    .item-media {
+      background-color: #EEF2FC;
+      background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.5) 50%, transparent 70%);
+      background-size: 200% 100%;
+      animation: shimmer 1.8s infinite;
+    }
+
+    .thumb[style*="background-image"]:not([style*="none"]),
+    .item-media[style*="background-image"] {
+      animation: none;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
+    }
+
+    @media (max-width:880px) {
+      .counter-row {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
     @media (max-width:880px) {
       .stats-grid {
         grid-template-columns: 1fr;
@@ -1175,6 +1399,222 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
         flex-direction: column;
         align-items: flex-start;
         text-align: left;
+      }
+    }
+
+    /* Icon strip navigasi cepat (mirip baris Regulive/Jobs/Electronics di referensi) */
+    .quicknav-row {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 24px 0;
+    }
+
+    .quicknav-grid {
+      display: flex;
+      gap: 32px;
+      overflow-x: auto;
+    }
+
+    .quicknav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .quicknav-item .ic {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .quicknav-item .ic svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--accent);
+    }
+
+    .quicknav-item .txt strong {
+      display: block;
+      font-size: 0.88rem;
+      color: var(--ink);
+    }
+
+    .quicknav-item .txt span {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* Layout sidebar + grid (mirip Home list / Featured Pages di referensi) */
+    .catalog-shell {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .side-nav {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      position: sticky;
+      top: 96px;
+    }
+
+    .side-nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .side-nav a.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .side-nav a:hover {
+      background: var(--paper);
+    }
+
+    /* Kartu item dengan foto asli, mirip Featured Pages */
+    .pcard {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .pcard .thumb {
+      height: 150px;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+    }
+
+    .pcard .thumb .tag {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .pcard .body {
+      padding: 16px;
+    }
+
+    .pcard .body .cat {
+      font-size: 0.72rem;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .pcard .body h4 {
+      font-size: 0.95rem;
+      margin-top: 4px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 600;
+    }
+
+    .pcard .body .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .pgrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    /* Hero collage foto (pengganti mockup HP di referensi) */
+    .hero-collage {
+      position: relative;
+      height: 380px;
+    }
+
+    .hero-collage .ph {
+      position: absolute;
+      border-radius: 12px;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 20px 40px -12px rgba(15, 27, 61, 0.35);
+      border: 4px solid #fff;
+    }
+
+    .hero-collage .ph1 {
+      width: 58%;
+      height: 65%;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+
+    .hero-collage .ph2 {
+      width: 48%;
+      height: 50%;
+      bottom: 0;
+      right: 0;
+      z-index: 3;
+    }
+
+    .hero-collage .ph3 {
+      width: 34%;
+      height: 34%;
+      top: 8%;
+      right: 4%;
+      z-index: 1;
+    }
+
+    @media (max-width:880px) {
+      .catalog-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .side-nav {
+        position: static;
+        display: flex;
+        overflow-x: auto;
+        gap: 6px;
+      }
+
+      .side-nav a {
+        flex-shrink: 0;
+        white-space: nowrap;
+      }
+
+      .pgrid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .hero-collage {
+        height: 260px;
+      }
+    }
+
+    @media (max-width:560px) {
+      .pgrid {
+        grid-template-columns: 1fr;
       }
     }
 
