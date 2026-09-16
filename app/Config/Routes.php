@@ -42,10 +42,11 @@ $routes->post('/checkout/proses', 'Checkout::proses');
 $routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1');
 
 // =====================================================
-// CEK BOOKING
+// AVAILABILITY 
 // =====================================================
 
-$routes->get('/cek-booking', 'CekBooking::index');
+$routes->get('availability', 'Availability::index');
+$routes->get('availability/cek/(:num)', 'Availability::cek/$1');
 
 // =====================================================
 // CUSTOMER AUTH

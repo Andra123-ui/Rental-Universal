@@ -42,33 +42,80 @@ class Cart extends BaseController
     }
 
     public function tambah()
-    {
-        $catalogItemId = $this->request->getPost('catalog_item_id');
-        $startAt = $this->request->getPost('start_at');
-        $endAt = $this->request->getPost('end_at');
-        $qty = max(1, (int) $this->request->getPost('qty'));
+{
+    $catalogItemId = (int) $this->request->getPost('catalog_item_id');
+    $startAt       = $this->request->getPost('start_at');
+    $endAt         = $this->request->getPost('end_at');
+    $branchId      = (int) $this->request->getPost('branch_id');
+    $qty           = max(1, (int) $this->request->getPost('qty'));
 
-        $catalogModel = new CatalogItemModel();
-        $product = $catalogModel->find($catalogItemId);
-
-        if (!$product) {
-            return redirect()->back()->with('error', 'Item tidak ditemukan.');
-        }
-
-        $cart = session()->get(self::SESSION_KEY) ?? [];
-        $key = $catalogItemId . '_' . md5($startAt . $endAt);
-
-        $cart[$key] = [
-            'catalog_item_id' => $catalogItemId,
-            'start_at' => $startAt,
-            'end_at' => $endAt,
-            'qty' => $qty,
-        ];
-
-        session()->set(self::SESSION_KEY, $cart);
-
-        return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
+    // 1. Validasi data wajib
+    if (!$catalogItemId || !$startAt || !$endAt || !$branchId) {
+        return redirect()->back()->with(
+            'error',
+            'Item, jadwal, jumlah, dan cabang wajib dipilih.'
+        );
     }
+
+    // 2. Pastikan waktu valid
+    if (strtotime($startAt) >= strtotime($endAt)) {
+        return redirect()->back()->with(
+            'error',
+            'Tanggal/jam selesai harus setelah tanggal/jam mulai.'
+        );
+    }
+
+    // 3. Cari item
+    $catalogModel = new CatalogItemModel();
+    $product = $catalogModel->find($catalogItemId);
+
+    if (!$product) {
+        return redirect()->back()->with(
+            'error',
+            'Item tidak ditemukan.'
+        );
+    }
+
+    // 4. CEK KETERSEDIAAN ULANG DI BACKEND
+    $availabilityModel = new \App\Models\AvailabilityModel();
+
+    $result = $availabilityModel->checkAvailability(
+        $catalogItemId,
+        $branchId,
+        $startAt,
+        $endAt,
+        $qty
+    );
+
+    // 5. Hanya status AVAILABLE yang boleh masuk keranjang
+    if ($result['status'] !== 'available') {
+        return redirect()->back()->with(
+            'error',
+            $result['message'] ?? 'Item tidak tersedia pada jadwal tersebut.'
+        );
+    }
+
+    // 6. Simpan ke cart
+    $cart = session()->get(self::SESSION_KEY) ?? [];
+
+    // Branch ikut dimasukkan ke key supaya booking
+    // item yang sama pada cabang berbeda tidak tertukar.
+    $key = $catalogItemId . '_' . $branchId . '_' . md5($startAt . $endAt);
+
+    $cart[$key] = [
+        'catalog_item_id' => $catalogItemId,
+        'branch_id'       => $branchId,
+        'start_at'        => $startAt,
+        'end_at'          => $endAt,
+        'qty'             => $qty,
+    ];
+
+    session()->set(self::SESSION_KEY, $cart);
+
+    return redirect()
+        ->to('/cart')
+        ->with('success', 'Item berhasil ditambahkan ke keranjang.');
+}
 
     public function update()
     {

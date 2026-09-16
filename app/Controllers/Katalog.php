@@ -103,32 +103,4 @@ class Katalog extends BaseController
     ]);
   }
 
-  /**
-   * PUB-05: Cek Ketersediaan (AJAX, JSON response)
-   * Cek overlap terhadap booking_resource_allocations aktif untuk item ini.
-   */
-  public function cekTersedia(int $catalogItemId)
-  {
-    $startAt = $this->request->getGet('start_at');
-    $endAt = $this->request->getGet('end_at');
-
-    if (empty($startAt) || empty($endAt)) {
-      return $this->response->setJSON(['available' => false, 'message' => 'Tanggal tidak lengkap']);
-    }
-
-    $db = \Config\Database::connect();
-
-    // Overlap: requested_start < existing_end AND requested_end > existing_start
-    $conflict = $db->table('booking_resource_allocations bra')
-      ->join('booking_items bi', 'bi.id = bra.booking_item_id')
-      ->where('bi.catalog_item_id', $catalogItemId)
-      ->whereIn('bra.status', ['RESERVED', 'IN_USE'])
-      ->where('bra.start_at <', $endAt)
-      ->where('bra.end_at >', $startAt)
-      ->countAllResults();
-
-    return $this->response->setJSON([
-      'available' => $conflict === 0,
-    ]);
-  }
 }

@@ -174,7 +174,7 @@ $idx = 0;
                     <div class="item-footer">
                         <div class="item-price">Rp<?= number_format($item['base_price'], 0, ',', '.') ?> <small>/
                                 <?= esc($item['unit_label']) ?></small></div>
-                        <a href="<?= base_url('/catalog/' . $item['id']) ?>" class="btn btn-outline"
+                        <a href="<?= base_url('/item/' . $item['id']) ?>" class="btn btn-outline"
                             style="padding:8px 14px;font-size:0.85rem;">Detail</a>
                     </div>
                 </div>
@@ -225,7 +225,7 @@ $idx = 0;
             <h2>Sudah pernah booking di sini sebelumnya?</h2>
             <div class="cta-actions">
                 <a href="/account/login" class="btn btn-primary">Masuk / Akun Saya</a>
-                <a href="<?= base_url('/cek-booking') ?>" class="btn btn-light">Cek Booking Tamu</a>
+                <a href="<?= base_url('/availability') ?>" class="btn btn-light">Cek Ketersediaan</a>
             </div>
         </div>
     </div>

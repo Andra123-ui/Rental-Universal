@@ -76,11 +76,11 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             </div>
 
             <!-- Booking card: cek ketersediaan + tambah ke keranjang -->
+            <!-- Booking card: arahkan ke halaman /availability untuk cek ketersediaan lengkap -->
             <div class="booking-card">
                 <h3>Cek Ketersediaan</h3>
-                <form id="form-cek-tersedia" method="post" action="<?= base_url('/cart/tambah') ?>">
-                    <input type="hidden" name="catalog_item_id" value="<?= esc($item['id']) ?>">
-                    <?= csrf_field() ?>
+                <form id="form-cek-tersedia" method="get" action="<?= base_url('/availability') ?>">
+                    <input type="hidden" name="item_id" value="<?= esc($item['id']) ?>">
 
                     <div class="field-group">
                         <label for="start_at">Tanggal/Jam Mulai</label>
@@ -95,15 +95,12 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                         <input type="number" id="qty" name="qty" min="1" value="1">
                     </div>
 
-                    <div id="avail-result"></div>
+                    <div id="form-error"></div>
 
-                    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
-                        <button type="button" id="btn-cek" class="btn btn-outline"
-                            style="width:100%;justify-content:center;">Cek
-                            Ketersediaan</button>
-                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Tambah
-                            ke
-                            Keranjang</button>
+                    <div style="margin-top:16px;">
+                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">
+                            Cek Ketersediaan
+                        </button>
                     </div>
                 </form>
             </div>
@@ -147,10 +144,20 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 </section>
 
 <script>
+document.getElementById('btn-tambah').disabled = true;
+
 document.getElementById('btn-cek').addEventListener('click', async function() {
     const startAt = document.getElementById('start_at').value;
     const endAt = document.getElementById('end_at').value;
+    const qty = document.getElementById('qty').value;
     const result = document.getElementById('avail-result');
+    const altBox = document.getElementById('alt-slots');
+    const priceBox = document.getElementById('price-estimate');
+    const btnTambah = document.getElementById('btn-tambah');
+
+    altBox.innerHTML = '';
+    priceBox.innerHTML = '';
+    btnTambah.disabled = true;
 
     if (!startAt || !endAt) {
         result.innerHTML =
@@ -166,19 +173,69 @@ document.getElementById('btn-cek').addEventListener('click', async function() {
     result.innerHTML = '<div class="avail-note">Memeriksa ketersediaan...</div>';
 
     try {
-        const res = await fetch('<?= base_url('/catalog/cek-tersedia/' . $item['id']) ?>?start_at=' +
-            encodeURIComponent(startAt) + '&end_at=' + encodeURIComponent(endAt));
+        const params = new URLSearchParams({
+            start_at: startAt,
+            end_at: endAt,
+            qty
+        });
+        const res = await fetch('<?= base_url('/availability/cek/' . $item['id']) ?>?' + params.toString());
         const data = await res.json();
-        if (data.available) {
-            result.innerHTML = '<div class="avail-note avail-ok">Tersedia untuk jadwal yang dipilih.</div>';
-        } else {
-            result.innerHTML =
-                '<div class="avail-note avail-warn">Maaf, tidak tersedia pada jadwal ini. Coba tanggal lain.</div>';
+
+        const cls = data.status === 'available' ? 'avail-ok' : 'avail-warn';
+        result.innerHTML = `<div class="avail-note ${cls}">${data.message}</div>`;
+
+        if (data.buffer_note) {
+            result.innerHTML += `<div class="avail-note">${data.buffer_note}</div>`;
+        }
+
+        if (data.status === 'available' && elBranch.value) {
+            btnTambah.disabled = false;
+        }
+
+        if (data.alternatives && data.alternatives.length) {
+            let html = '<div style="margin-top:10px;"><strong>Alternatif jadwal terdekat:</strong><ul>';
+            data.alternatives.forEach(a => {
+                html += `<li>${a.start_at} &ndash; ${a.end_at}</li>`;
+            });
+            html += '</ul></div>';
+            altBox.innerHTML = html;
+        }
+
+        if (data.price_estimate) {
+            const p = data.price_estimate;
+            priceBox.innerHTML = `<div class="alert-box alert-info" style="margin-top:14px;">
+                Estimasi harga: Rp ${Number(p.subtotal).toLocaleString('id-ID')}
+                <small>(belum final)</small>
+            </div>`;
         }
     } catch (e) {
         result.innerHTML =
             '<div class="avail-note avail-warn">Gagal memeriksa ketersediaan. Coba lagi.</div>';
+        btnTambah.disabled = true;
     }
+});
+</script>
+
+<script>
+document.getElementById('form-cek-tersedia').addEventListener('submit', function(e) {
+    const startAt = document.getElementById('start_at').value;
+    const endAt = document.getElementById('end_at').value;
+    const errBox = document.getElementById('form-error');
+    errBox.innerHTML = '';
+
+    if (!startAt || !endAt) {
+        e.preventDefault();
+        errBox.innerHTML =
+            '<div class="avail-note avail-warn">Isi tanggal mulai dan selesai terlebih dahulu.</div>';
+        return;
+    }
+    if (new Date(startAt) >= new Date(endAt)) {
+        e.preventDefault();
+        errBox.innerHTML =
+            '<div class="avail-note avail-warn">Tanggal selesai harus setelah tanggal mulai.</div>';
+        return;
+    }
+    // valid -> form submit natural GET ke /availability, browser yang redirect
 });
 </script>
 
