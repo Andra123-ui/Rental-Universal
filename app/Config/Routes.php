@@ -14,6 +14,16 @@ $routes->get('/', 'Home::index');
 $routes->get('/catalog', 'Katalog::index');
 $routes->get('/item/(:num)', 'Katalog::detail/$1');
 
+// PUB-05: Cek Ketersediaan (AJAX, dipanggil dari halaman detail item)
+$routes->get('/item/cek-tersedia/(:num)', 'Katalog::cekTersedia/$1');
+
+// =====================================================
+// AVAILABILITY 
+// =====================================================
+
+$routes->get('availability', 'Availability::index');
+$routes->get('availability/cek/(:num)', 'Availability::cek/$1');
+
 // =====================================================
 // CART
 // =====================================================
@@ -32,6 +42,9 @@ $routes->get('/cart/hapus/(:segment)', 'Cart::hapus/$1');
 
 $routes->get('/checkout', 'Checkout::index');
 
+// PUB-07: simpan data penyewa (guest atau hasil login OTP)
+$routes->post('/checkout/simpan-customer', 'Checkout::simpanCustomer');
+
 $routes->get('/checkout/fulfillment', 'Checkout::fulfillment');
 $routes->post('/checkout/fulfillment', 'Checkout::simpanFulfillment');
 
@@ -42,14 +55,25 @@ $routes->post('/checkout/proses', 'Checkout::proses');
 $routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1');
 
 // =====================================================
-// AVAILABILITY 
+// CEK BOOKING (guest, tanpa login)
 // =====================================================
 
-$routes->get('availability', 'Availability::index');
-$routes->get('availability/cek/(:num)', 'Availability::cek/$1');
+$routes->get('/cek-booking', 'CekBooking::index');
 
 // =====================================================
-// CUSTOMER AUTH
+// BANTUAN / FAQ
+// =====================================================
+
+$routes->get('/help', 'Help::index');
+
+// =====================================================
+// SYARAT & KETENTUAN
+// =====================================================
+
+$routes->get('terms', 'Terms::index');
+
+// =====================================================
+// CUSTOMER AUTH (OTP WhatsApp)
 // =====================================================
 
 $routes->group('account', [

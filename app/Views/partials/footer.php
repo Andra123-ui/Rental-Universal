@@ -14,7 +14,6 @@ $mapQuery = urlencode($bizAddr);
     .footer-top-grid {
         display: grid;
         grid-template-columns: 1.2fr 1fr 1.2fr 1.5fr;
-        /* Kolom peta dibuat lebih lebar (1.5fr) */
         gap: 30px;
         align-items: start;
     }
@@ -78,7 +77,7 @@ $mapQuery = urlencode($bizAddr);
                 <h3>Kenapa booking di sini lebih berbeda?</h3>
                 <p>Ketersediaan real-time, invoice otomatis, dan tanpa ribet bikin akun untuk mulai transaksi.</p>
             </div>
-            <a href="<?= base_url('/katalog') ?>" class="btn btn-light">Mulai Booking</a>
+            <a href="<?= base_url('/catalog') ?>" class="btn btn-light">Mulai Booking</a>
         </div>
     </div>
 </section>
@@ -95,7 +94,6 @@ $mapQuery = urlencode($bizAddr);
                 <p>Sistem sewa barang dan jasa dalam satu platform — cek ketersediaan, booking, dan kelola riwayat
                     transaksi Anda sendiri.</p>
                 <div class="footer-social">
-                    <!-- Link Facebook -->
                     <a href="https://facebook.com/NAMA_AKUN_ANDA" target="_blank" rel="noopener noreferrer"
                         aria-label="Facebook">
                         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"
@@ -103,8 +101,6 @@ $mapQuery = urlencode($bizAddr);
                             <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
                         </svg>
                     </a>
-
-                    <!-- Link Instagram -->
                     <a href="https://www.instagram.com/otwgusaha?stkn=Zmttank4bDN5cDB4" target="_blank"
                         rel="noopener noreferrer" aria-label="Instagram">
                         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"
@@ -114,8 +110,6 @@ $mapQuery = urlencode($bizAddr);
                             <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
                         </svg>
                     </a>
-
-                    <!-- Link WhatsApp -->
                     <a href="https://wa.me/6282384444812" target="_blank" rel="noopener noreferrer"
                         aria-label="WhatsApp">
                         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"
@@ -131,9 +125,10 @@ $mapQuery = urlencode($bizAddr);
             <div class="footer-col">
                 <h4>Tautan Cepat</h4>
                 <ul>
-                    <li><a href="<?= base_url('/katalog') ?>">Katalog</a></li>
-                    <li><a href="<?= base_url('/keranjang') ?>">Keranjang</a></li>
+                    <li><a href="<?= base_url('/catalog') ?>">Katalog</a></li>
+                    <li><a href="<?= base_url('/cart') ?>">Keranjang</a></li>
                     <li><a href="<?= base_url('/cek-booking') ?>">Cek Booking</a></li>
+                    <li><a href="<?= base_url('/help') ?>">Bantuan & FAQ</a></li>
                     <li><a href="<?= site_url('account/login') ?>">Masuk / Akun Saya</a></li>
                 </ul>
             </div>
@@ -197,20 +192,22 @@ $mapQuery = urlencode($bizAddr);
                 <?= date('Y') ?>
                 <?= esc($bizName) ?>. Semua hak dilindungi.
             </span>
-            <span>Dibangun dengan CodeIgniter 4</span>
+            <div class="footer-bottom-links" style="display:flex;gap:8px;align-items:center;">
+                <a href="<?= base_url('/help') ?>">Bantuan</a>
+                <span>&middot;</span>
+                <span>Dibangun dengan CodeIgniter 4</span>
+            </div>
         </div>
     </div>
 </footer>
 
 <script>
-    // Toggle nav mobile
     document.querySelectorAll('.nav-toggle').forEach(function (btn) {
         btn.addEventListener('click', function () {
             document.querySelector('.nav-links').classList.toggle('nav-open');
         });
     });
 
-    // Scroll reveal
     const revealEls = document.querySelectorAll('.reveal');
     const revealObserver = new IntersectionObserver((entries) => {
         entries.forEach(e => {
@@ -222,7 +219,6 @@ $mapQuery = urlencode($bizAddr);
     }, { threshold: 0.15 });
     revealEls.forEach(el => revealObserver.observe(el));
 
-    // Counter animation
     const counters = document.querySelectorAll('.counter-item .num[data-target]');
     const counterObserver = new IntersectionObserver((entries) => {
         entries.forEach(e => {

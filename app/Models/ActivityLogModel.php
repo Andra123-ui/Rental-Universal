@@ -20,11 +20,11 @@ use CodeIgniter\Model;
  */
 class ActivityLogModel extends Model
 {
-    protected $table            = 'activity_logs';
-    protected $primaryKey       = 'id';
+    protected $table = 'activity_logs';
+    protected $primaryKey = 'id';
     protected $useAutoIncrement = true;
-    protected $returnType       = 'array';
-    protected $allowedFields    = [
+    protected $returnType = 'array';
+    protected $allowedFields = [
         'actor_type',
         'actor_id',
         'event',
@@ -34,14 +34,14 @@ class ActivityLogModel extends Model
     ];
 
     protected $useTimestamps = true;
-    protected $createdField  = 'created_at';
-    protected $updatedField  = '';
+    protected $createdField = 'created_at';
+    protected $updatedField = '';
 
-    public const EVENT_LOGIN_OTP_SENT     = 'CUSTOMER_LOGIN_OTP_SENT';
-    public const EVENT_LOGIN_SUCCESS      = 'CUSTOMER_LOGIN_SUCCESS';
-    public const EVENT_LOGIN_OTP_FAILED   = 'CUSTOMER_LOGIN_OTP_FAILED';
-    public const EVENT_LOGIN_OTP_EXPIRED  = 'CUSTOMER_LOGIN_OTP_EXPIRED';
-    public const EVENT_LOGIN_OTP_BLOCKED  = 'CUSTOMER_LOGIN_OTP_BLOCKED';
+    public const EVENT_LOGIN_OTP_SENT = 'CUSTOMER_LOGIN_OTP_SENT';
+    public const EVENT_LOGIN_SUCCESS = 'CUSTOMER_LOGIN_SUCCESS';
+    public const EVENT_LOGIN_OTP_FAILED = 'CUSTOMER_LOGIN_OTP_FAILED';
+    public const EVENT_LOGIN_OTP_EXPIRED = 'CUSTOMER_LOGIN_OTP_EXPIRED';
+    public const EVENT_LOGIN_OTP_BLOCKED = 'CUSTOMER_LOGIN_OTP_BLOCKED';
 
     /**
      * Catat event dengan aman: TIDAK PERNAH menyimpan kode OTP, hash-nya,
@@ -51,12 +51,12 @@ class ActivityLogModel extends Model
     {
         try {
             $this->insert([
-                'actor_type'  => 'CUSTOMER',
-                'actor_id'    => $customerAccountId,
-                'event'       => $event,
+                'actor_type' => 'CUSTOMER',
+                'actor_id' => $customerAccountId,
+                'event' => $event,
                 'description' => $description,
-                'ip_address'  => $ip,
-                'user_agent'  => $userAgent,
+                'ip_address' => $ip,
+                'user_agent' => $userAgent,
             ]);
         } catch (\Throwable $e) {
             // Jangan sampai gagal logging menghentikan proses login/verify.
