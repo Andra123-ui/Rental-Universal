@@ -22,32 +22,32 @@
         </div>
 
         <?php if (session()->getFlashdata('errors')): ?>
-        <div class="alert-box alert-warn">
-            <?php foreach (session()->getFlashdata('errors') as $err): ?>
-            <div>
-                <?= esc($err) ?>
+            <div class="alert-box alert-warn">
+                <?php foreach (session()->getFlashdata('errors') as $err): ?>
+                    <div>
+                        <?= esc($err) ?>
+                    </div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
-        </div>
         <?php endif; ?>
 
         <div class="detail-grid">
             <div>
                 <?php if ($loggedCustomer): ?>
-                <div class="alert-box alert-success">
-                    Anda masuk sebagai <strong>
-                        <?= esc($loggedCustomer['name']) ?>
-                    </strong> (
-                    <?= esc($loggedCustomer['phone']) ?>).
-                    Data di bawah otomatis terisi dari akun Anda.
-                </div>
+                    <div class="alert-box alert-success">
+                        Anda masuk sebagai <strong>
+                            <?= esc($loggedCustomer['name']) ?>
+                        </strong> (
+                        <?= esc($loggedCustomer['phone']) ?>).
+                        Data di bawah otomatis terisi dari akun Anda.
+                    </div>
                 <?php else: ?>
-                <div class="alert-box alert-info">
-                    Anda dapat memesan sebagai <strong>tamu</strong> tanpa login, atau
-                    <a href="/account/login?redirect=/checkout" style="font-weight:600;color:var(--accent);">masuk
-                        dengan OTP WhatsApp</a>
-                    supaya riwayat booking otomatis tersimpan di akun Anda.
-                </div>
+                    <div class="alert-box alert-info">
+                        Anda dapat memesan sebagai <strong>tamu</strong> tanpa login, atau
+                        <a href="/account/login?redirect=/checkout" style="font-weight:600;color:var(--accent);">masuk
+                            dengan OTP WhatsApp</a>
+                        supaya riwayat booking otomatis tersimpan di akun Anda.
+                    </div>
                 <?php endif; ?>
 
                 <form method="post" action="<?= base_url('/checkout/simpan-customer') ?>">
@@ -75,10 +75,13 @@
 
                     <label
                         style="display:flex;gap:8px;align-items:flex-start;font-size:0.85rem;color:var(--muted);margin:16px 0;">
-                        <input type="checkbox" required style="margin-top:3px;">
-                        Saya menyetujui <a href="<?= base_url('/terms') ?>" style="color:var(--accent);">syarat &
-                            ketentuan rental</a> dan kebijakan privasi.
+                        <input type="checkbox" name="agree_terms" required style="margin-top:3px;">
+                        Saya menyetujui <a href="<?= base_url('/terms') ?>" target="_blank"
+                            style="color:var(--accent);">syarat & ketentuan rental</a> (v
+                        <?= esc(\App\Controllers\Terms::CURRENT_VERSION) ?>) dan kebijakan privasi.
                     </label>
+                    <input type="hidden" name="terms_version"
+                        value="<?= esc(\App\Controllers\Terms::CURRENT_VERSION) ?>">
 
                     <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Lanjut ke
                         Fulfillment</button>

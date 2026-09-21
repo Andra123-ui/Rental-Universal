@@ -60,6 +60,9 @@ $routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1');
 
 $routes->get('/cek-booking', 'CekBooking::index');
 
+// TERMS & CONDITIONS
+$routes->get('/terms', 'Terms::index');
+
 // =====================================================
 // BANTUAN / FAQ
 // =====================================================

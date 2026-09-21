@@ -49,6 +49,11 @@ class Checkout extends BaseController
             'email' => $this->request->getPost('email'),
             'notes' => $this->request->getPost('notes'),
             'is_guest' => session()->get('customer') ? false : true,
+            // Pelacakan persetujuan syarat & ketentuan (PUB-16 business rule):
+            // simpan versi terms + timestamp persetujuan, bukan cuma boolean.
+            'terms_agreed_version' => $this->request->getPost('terms_version'),
+            'terms_agreed_at' => date('Y-m-d H:i:s'),
+            'terms_agreed_ip' => $this->request->getIPAddress(),
         ];
 
         session()->set(self::CHECKOUT_KEY, array_merge(
@@ -254,6 +259,9 @@ class Checkout extends BaseController
                 'paid_total' => 0,
                 'balance_due' => $grandTotal,
                 'customer_notes' => $custData['notes'] ?? null,
+                'internal_notes' => 'Menyetujui Terms v' . ($custData['terms_agreed_version'] ?? '-')
+                    . ' pada ' . ($custData['terms_agreed_at'] ?? '-')
+                    . ' dari IP ' . ($custData['terms_agreed_ip'] ?? '-'),
                 'expires_at' => date('Y-m-d H:i:s', strtotime('+24 hours')),
             ]);
 

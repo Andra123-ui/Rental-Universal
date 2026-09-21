@@ -1,131 +1,257 @@
-<?= $this->include('partials/header') ?>
+<?php
+/**
+ * @var array $biz
+ * @var array $sections
+ * @var string $version
+ * @var string $lastUpdated
+ */
+$bizName = $biz['business_name'] ?? 'Rental Universal';
+?>
+<?= view('partials/header', ['title' => 'Syarat & Ketentuan']) ?>
 
-<div class="container my-5" style="max-width: 1000px;">
-    <!-- Breadcrumb / Header Blueprint Info -->
-    <div
-        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid #dee2e6;">
-        <div>
-            <span style="font-size: 0.85rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px;">RENTAL
-                UNIVERSAL | UI / PAGE BLUEPRINT</span>
-            <h2 style="font-weight: 700; color: #212529; margin-top: 0.25rem;">PUB-16 - Syarat & Ketentuan Rental</h2>
-        </div>
-        <div>
-            <span
-                style="background-color: #198754; color: white; padding: 0.35rem 0.65rem; border-radius: 0.375rem; font-size: 0.85rem; font-weight: 600;">MVP</span>
-        </div>
-    </div>
-
-    <!-- Deskripsi Singkat Blueprint -->
-    <div
-        style="background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1.5rem;">
-        <p style="margin-bottom: 0; color: #495057;">
-            <strong>Tujuan:</strong> Menjelaskan aturan penggunaan, pembayaran, pembatalan, kerusakan, keterlambatan,
-            deposit, dan privasi secara jelas.
+<div class="page-banner">
+    <div class="wrap">
+        <div class="crumb"><a href="<?= base_url('/') ?>">Beranda</a> / Syarat & Ketentuan</div>
+        <h1>Syarat & Ketentuan Rental</h1>
+        <p style="color:#C9D4EE;margin-top:10px;font-size:0.9rem;">
+            Versi
+            <?= esc($version) ?> &middot; Terakhir diperbarui
+            <?= esc(date('d F Y', strtotime($lastUpdated))) ?>
         </p>
-    </div>
-
-    <!-- Konten Komponen Syarat & Ketentuan -->
-    <div
-        style="background: #ffffff; border: 1px solid #e9ecef; border-radius: 0.5rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); margin-bottom: 1.5rem;">
-        <div
-            style="background-color: #212529; color: white; padding: 1rem 1.25rem; border-top-left-radius: 0.5rem; border-top-right-radius: 0.5rem;">
-            <h5 style="margin: 0; font-size: 1.1rem; font-weight: 600;">Ketentuan Layanan Rental</h5>
-        </div>
-        <div style="padding: 1.5rem;">
-
-            <!-- 1. General Terms -->
-            <div style="margin-bottom: 1.5rem;">
-                <h5 style="color: #0d6efd; font-weight: 700; margin-bottom: 0.5rem;">1. General Terms (Ketentuan Umum)
-                </h5>
-                <p style="color: #6c757d; margin-bottom: 0.5rem;">Hak dan kewajiban penyewa dan pemilik kendaraan
-                    dijelaskan dengan bahasa yang mudah dipahami.</p>
-                <ul style="color: #495057; padding-left: 1.25rem; margin-bottom: 0;">
-                    <li style="margin-bottom: 0.25rem;">Penyewa wajib memiliki SIM yang sah dan masih berlaku.</li>
-                    <li>Pemilik menjamin kondisi kendaraan dalam keadaan prima dan layak jalan.</li>
-                </ul>
-            </div>
-            <hr style="border-top: 1px solid #dee2e6; margin: 1.5rem 0;">
-
-            <!-- 2. Payment / Cancellation -->
-            <div style="margin-bottom: 1.5rem;">
-                <h5 style="color: #0d6efd; font-weight: 700; margin-bottom: 0.5rem;">2. Payment / Cancellation
-                    (Pembayaran & Pembatalan)</h5>
-                <p style="color: #6c757d; margin-bottom: 0.5rem;">Sesuai kebijakan bisnis perusahaan:</p>
-                <ul style="color: #495057; padding-left: 1.25rem; margin-bottom: 0;">
-                    <li style="margin-bottom: 0.25rem;"><strong>DP (Down Payment):</strong> Wajib dibayarkan minimal 30%
-                        saat konfirmasi booking.</li>
-                    <li style="margin-bottom: 0.25rem;"><strong>Pelunasan:</strong> Dilakukan selambat-lambatnya saat
-                        serah terima kendaraan (pickup).</li>
-                    <li><strong>Refund & Reschedule:</strong> Pembatalan H-3 mendapatkan pengembalian dana 50%,
-                        penundaan jadwal (reschedule) gratis 1 kali.</li>
-                </ul>
-            </div>
-            <hr style="border-top: 1px solid #dee2e6; margin: 1.5rem 0;">
-
-            <!-- 3. Operational Terms -->
-            <div style="margin-bottom: 1.5rem;">
-                <h5 style="color: #0d6efd; font-weight: 700; margin-bottom: 0.5rem;">3. Operational Terms (Operasional)
-                </h5>
-                <p style="color: #6c757d; margin-bottom: 0.5rem;">Generik dan dapat dikustom:</p>
-                <ul style="color: #495057; padding-left: 1.25rem; margin-bottom: 0;">
-                    <li style="margin-bottom: 0.25rem;"><strong>Pickup / Return:</strong> Serah terima dan pengembalian
-                        dilakukan sesuai jam operasional di pool atau lokasi yang disepakati.</li>
-                    <li style="margin-bottom: 0.25rem;"><strong>Overtime:</strong> Keterlambatan pengembalian dikenakan
-                        denda per jam sesuai tarif yang berlaku.</li>
-                    <li><strong>Prohibited Use:</strong> Dilarang keras menggunakan kendaraan untuk balap liar, tindak
-                        kejahatan, atau dipindahtangankan ke pihak ketiga.</li>
-                </ul>
-            </div>
-            <hr style="border-top: 1px solid #dee2e6; margin: 1.5rem 0;">
-
-            <!-- 4. Deposit / Damage -->
-            <div style="margin-bottom: 1.5rem;">
-                <h5 style="color: #0d6efd; font-weight: 700; margin-bottom: 0.5rem;">4. Deposit / Damage (Deposit &
-                    Kerusakan)</h5>
-                <p style="color: #6c757d; margin-bottom: 0.5rem;">Kapan deposit ditahan, dipotong, atau dikembalikan:
-                </p>
-                <ul style="color: #495057; padding-left: 1.25rem; margin-bottom: 0;">
-                    <li style="margin-bottom: 0.25rem;">Deposit keamanan (refundable deposit) dibayarkan saat pickup dan
-                        dikembalikan maksimal 1x24 jam setelah kendaraan dicek saat pengembalian.</li>
-                    <li>Pemotongan deposit dilakukan jika terjadi kerusakan ringan, baret, atau kekurangan bahan bakar.
-                    </li>
-                </ul>
-            </div>
-            <hr style="border-top: 1px solid #dee2e6; margin: 1.5rem 0;">
-
-            <!-- 5. Privacy -->
-            <div>
-                <h5 style="color: #0d6efd; font-weight: 700; margin-bottom: 0.5rem;">5. Privacy (Privasi & Keamanan
-                    Data)</h5>
-                <p style="color: #6c757d; margin-bottom: 0.5rem;">Sesuai kebutuhan legal:</p>
-                <ul style="color: #495057; padding-left: 1.25rem; margin-bottom: 0;">
-                    <li>Penggunaan data dan dokumen customer (KTP, SIM, KK) dijamin kerahasiaannya dan hanya digunakan
-                        untuk keperluan verifikasi rental.</li>
-                </ul>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- Aksi / Tombol Utama & Catatan Validasi -->
-    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-        <div
-            style="flex: 1; min-width: 280px; background: #ffffff; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 1.25rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);">
-            <h6 style="font-weight: 700; color: #212529; margin-bottom: 1rem;">Aksi / Tombol Utama</h6>
-            <a href="<?= base_url('booking') ?>"
-                style="display: inline-block; background-color: #6c757d; color: white; padding: 0.5rem 1rem; border-radius: 0.375rem; text-decoration: none; font-weight: 500;">
-                ← Kembali ke Booking
-            </a>
-        </div>
-        <div
-            style="flex: 1; min-width: 280px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 1.25rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);">
-            <h6 style="font-weight: 700; color: #212529; margin-bottom: 0.75rem;">Business Rules / Validasi</h6>
-            <p style="font-size: 0.9rem; color: #6c757d; margin-bottom: 0;">
-                Versi terms yang disetujui customer sebaiknya dapat dilacak jika kebutuhan legal tinggi; minimal simpan
-                timestamp persetujuan/metadata di aplikasi pada tabel <code>bookings</code>.
-            </p>
-        </div>
     </div>
 </div>
 
-<?= $this->include('partials/footer') ?>
+<section style="padding-top:32px;">
+    <div class="wrap">
+        <div class="terms-shell">
+
+            <!-- Sticky Table of Contents -->
+            <nav class="terms-toc" id="termsToc">
+                <span class="terms-toc-label">Daftar Isi</span>
+                <?php foreach ($sections as $sec): ?>
+                    <a href="#<?= esc($sec['id']) ?>" data-toc-link data-target="<?= esc($sec['id']) ?>">
+                        <?= esc($sec['title']) ?>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+
+            <!-- Isi Terms -->
+            <div class="terms-content">
+                <div class="alert-box alert-info reveal">
+                    Dengan melanjutkan booking di <strong>
+                        <?= esc($bizName) ?>
+                    </strong>, Anda dianggap telah membaca dan
+                    menyetujui seluruh syarat &amp; ketentuan berikut ini.
+                </div>
+
+                <?php foreach ($sections as $i => $sec): ?>
+                    <div class="terms-section reveal reveal-delay-<?= min($i + 1, 4) ?>" id="<?= esc($sec['id']) ?>">
+                        <h2>
+                            <?= esc($sec['title']) ?>
+                        </h2>
+                        <ol class="terms-list">
+                            <?php foreach ($sec['content'] as $point): ?>
+                                <li>
+                                    <?= esc($point) ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ol>
+                    </div>
+                <?php endforeach; ?>
+
+                <div class="terms-footer-note reveal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 8v5M12 16h.01" />
+                    </svg>
+                    <p>
+                        Punya pertanyaan tentang syarat & ketentuan ini? Hubungi kami melalui halaman
+                        <a href="<?= base_url('/help') ?>">Bantuan &amp; FAQ</a>.
+                    </p>
+                </div>
+
+                <!-- Aksi utama: Kembali ke booking -->
+                <div class="terms-actions">
+                    <button type="button" id="btnBackToBooking" class="btn btn-primary">
+                        &larr; Kembali ke Booking
+                    </button>
+                    <a href="<?= base_url('/catalog') ?>" class="btn btn-outline">Lihat Katalog</a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<style>
+    .terms-shell {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        gap: 44px;
+        align-items: start;
+    }
+
+    .terms-toc {
+        position: sticky;
+        top: 96px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .terms-toc-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 8px;
+    }
+
+    .terms-toc a {
+        padding: 9px 10px;
+        border-radius: 6px;
+        font-size: 0.86rem;
+        color: var(--muted);
+        transition: background .15s ease, color .15s ease;
+    }
+
+    .terms-toc a:hover {
+        background: var(--paper);
+        color: var(--ink);
+    }
+
+    .terms-toc a.active {
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .terms-section {
+        margin-bottom: 40px;
+        padding-bottom: 32px;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .terms-section:last-of-type {
+        border-bottom: none;
+    }
+
+    .terms-section h2 {
+        font-size: 1.35rem;
+        margin-bottom: 16px;
+        scroll-margin-top: 110px;
+    }
+
+    .terms-list {
+        margin: 0;
+        padding-left: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .terms-list li {
+        font-size: 0.92rem;
+        color: var(--muted);
+        line-height: 1.7;
+    }
+
+    .terms-footer-note {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--paper);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        margin-top: 8px;
+    }
+
+    .terms-footer-note svg {
+        width: 18px;
+        height: 18px;
+        stroke: var(--accent);
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .terms-footer-note p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+    }
+
+    .terms-footer-note a {
+        color: var(--accent);
+        font-weight: 600;
+    }
+
+    .terms-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 28px;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width:880px) {
+        .terms-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .terms-toc {
+            position: static;
+            flex-direction: row;
+            overflow-x: auto;
+            gap: 6px;
+        }
+
+        .terms-toc a {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .terms-toc-label {
+            display: none;
+        }
+    }
+</style>
+
+<script>
+    (function () {
+        // Highlight TOC link sesuai section yang sedang terlihat di layar
+        const sections = document.querySelectorAll('.terms-section');
+        const tocLinks = document.querySelectorAll('[data-toc-link]');
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const link = document.querySelector('[data-target="' + entry.target.id + '"]');
+                if (!link) return;
+                if (entry.isIntersecting) {
+                    tocLinks.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-100px 0px -60% 0px' });
+
+        sections.forEach(sec => observer.observe(sec));
+
+        // Tombol "Kembali ke Booking": kembali ke halaman sebelumnya (mis. checkout/keranjang),
+        // fallback ke /cart kalau tidak ada riwayat browser yang relevan.
+        document.getElementById('btnBackToBooking').addEventListener('click', function () {
+            const ref = document.referrer;
+            const sameSite = ref && ref.indexOf(window.location.origin) === 0;
+            if (sameSite && window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = '<?= base_url('/cart') ?>';
+            }
+        });
+    })();
+</script>
+
+<?= view('partials/footer') ?>
