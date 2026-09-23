@@ -92,4 +92,11 @@ $routes->group('account', [
     $routes->post('verify', 'AuthController::verifyOtp');
     $routes->post('verify/resend', 'AuthController::resendOtp');
     $routes->get('verify/change-phone', 'AuthController::changePhone');
+
+    // CAUTH-03 — hanya boleh diakses yang sudah login (bukan yang sudah lengkap profil)
+    $routes->get('onboarding', 'AuthController::onboardingForm', ['filter' => 'customerAuth']);
+    $routes->post('onboarding', 'AuthController::onboardingSubmit', ['filter' => 'customerAuth']);
+
+    // CAUTH-04
+    $routes->post('logout', 'AuthController::logout');
 });

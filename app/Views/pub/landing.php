@@ -44,27 +44,6 @@ $idx = 0;
                     style="background-image:url('<?= esc(catFoto('kamera-alat', $categoryPhotos)) ?>');"></div>
             </div>
         </div>
-
-        <form class="search-card reveal reveal-delay-2" method="get" action="<?= base_url('/catalog') ?>">
-            <div class="search-field">
-                <label for="s-kategori">Kategori</label>
-                <select id="s-kategori" name="kategori">
-                    <option value="">Semua kategori</option>
-                    <?php foreach ($categories as $cat): ?>
-                    <option value="<?= esc($cat['slug']) ?>"><?= esc($cat['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="search-field">
-                <label for="s-mulai">Tanggal mulai</label>
-                <input type="date" id="s-mulai" name="start_at">
-            </div>
-            <div class="search-field">
-                <label for="s-selesai">Tanggal selesai</label>
-                <input type="date" id="s-selesai" name="end_at">
-            </div>
-            <button type="submit" class="btn btn-primary">Cek Ketersediaan</button>
-        </form>
     </div>
 </section>
 
