@@ -174,6 +174,7 @@ class Checkout extends BaseController
             $bookingModel = new BookingModel();
             $bookingItemModel = new BookingItemModel();
             $allocModel = new BookingResourceAllocationModel();
+            $availabilityModel = new \App\Models\AvailabilityModel();
 
             $custData = $checkoutData['customer'];
 
@@ -203,17 +204,21 @@ class Checkout extends BaseController
                     continue;
                 }
 
-                // Re-check availability sebelum commit (server-side, wajib)
-                $conflict = $db->table('booking_resource_allocations bra')
-                    ->join('booking_items bi', 'bi.id = bra.booking_item_id')
-                    ->where('bi.catalog_item_id', $product['id'])
-                    ->whereIn('bra.allocation_status', ['RESERVED', 'IN_USE'])
-                    ->where('bra.start_at <', $line['end_at'])
-                    ->where('bra.end_at >', $line['start_at'])
-                    ->countAllResults();
+                // Re-check availability sebelum commit (server-side, wajib) —
+                // pakai AvailabilityModel supaya konsisten dengan cek yang sama
+                // di /item/cek-tersedia dan Cart::tambah()/update(), sekaligus
+                // memperhitungkan kapasitas resource, blackout, dan maintenance
+                // (bukan cuma cek overlap jadwal sederhana).
+                $availCheck = $availabilityModel->checkAvailability(
+                    (int) $product['id'],
+                    $line['branch_id'] ?? null,
+                    $line['start_at'],
+                    $line['end_at'],
+                    (int) $line['qty']
+                );
 
-                if ($conflict > 0) {
-                    throw new DatabaseException("Item '{$product['name']}' sudah tidak tersedia pada jadwal yang dipilih.");
+                if ($availCheck['status'] !== 'available') {
+                    throw new DatabaseException("Item '{$product['name']}': " . ($availCheck['message'] ?? 'sudah tidak tersedia pada jadwal yang dipilih.'));
                 }
 
                 $lineTotal = $product['base_price'] * $line['qty'];
@@ -284,11 +289,13 @@ class Checkout extends BaseController
                     'status' => 'RESERVED',
                 ]);
 
-                // Auto-allocate resource pertama yang available untuk item ini
-                $resource = $resourceModel
-                    ->where('catalog_item_id', $product['id'])
-                    ->where('status', 'AVAILABLE')
-                    ->first();
+                // Auto-allocate resource yang benar-benar kosong di rentang waktu ini
+                // (bukan cuma cek status AVAILABLE statis, tapi cek jadwal allocation-nya juga)
+                $resource = $resourceModel->findFreeResourceForPeriod(
+                    (int) $product['id'],
+                    $line['start_at'],
+                    $line['end_at']
+                );
 
                 if ($resource) {
                     $allocModel->insert([

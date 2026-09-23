@@ -152,6 +152,7 @@
         border-right: 1px solid var(--line);
         border-radius: 0;
         padding: 6px 4px;
+        appearance: textfield;
         -moz-appearance: textfield;
     }
 
@@ -166,6 +167,11 @@
         font-size: 0.72rem;
         color: var(--accent);
         margin-top: 2px;
+    }
+
+    .qty-saving-indicator.qty-error {
+        color: #B91C1C;
+        font-weight: 600;
     }
 
     .js-line-total {
@@ -186,6 +192,13 @@
         const subtotalEl = document.querySelector('.js-subtotal');
         const grandTotalEl = document.querySelector('.js-grand-total');
         const rupiah = (n) => 'Rp' + Math.round(n).toLocaleString('id-ID');
+
+        // Token CSRF dinamis: mulai dari nilai yang di-embed saat halaman dimuat,
+        // lalu selalu diperbarui dari respons server setiap request AJAX berhasil/gagal.
+        // Ini WAJIB karena CI4 meregenerasi CSRF token setiap request POST -> kalau
+        // pakai token statis, request kedua dan seterusnya akan selalu ditolak.
+        let csrfTokenName = '<?= csrf_token() ?>';
+        let csrfHash = '<?= csrf_hash() ?>';
 
         function recalcAll() {
             let subtotal = 0;
@@ -209,28 +222,52 @@
             const key = row.dataset.key;
             const qtyInput = row.querySelector('.js-qty');
             const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+            const previousQty = row.dataset.lastConfirmedQty || qty;
             qtyInput.value = qty;
 
             const indicator = row.querySelector('.qty-saving-indicator');
             indicator.style.display = 'block';
+            indicator.classList.remove('qty-error');
+            indicator.textContent = 'Menyimpan...';
 
             const formData = new FormData();
             formData.append('key', key);
             formData.append('qty', qty);
-            formData.append('<?= csrf_token() ?>', '<?= csrf_hash() ?>');
+            formData.append(csrfTokenName, csrfHash);
 
             fetch('<?= base_url('/cart/update') ?>', {
                 method: 'POST',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 body: formData
             })
-                .then(res => res.json())
+                .then(async res => {
+                    const data = await res.json();
+                    // Selalu sinkronkan token terbaru dari server, apa pun hasilnya (sukses/gagal),
+                    // supaya request AJAX berikutnya tidak ditolak CSRF.
+                    if (data.csrf_token_name && data.csrf_hash) {
+                        csrfTokenName = data.csrf_token_name;
+                        csrfHash = data.csrf_hash;
+                    }
+                    if (!res.ok || !data.success) {
+                        throw data;
+                    }
+                    return data;
+                })
                 .then(() => {
+                    row.dataset.lastConfirmedQty = qty;
                     indicator.style.display = 'none';
                 })
-                .catch(() => {
-                    indicator.textContent = 'Gagal menyimpan';
-                    setTimeout(() => { indicator.style.display = 'none'; indicator.textContent = 'Menyimpan...'; }, 2000);
+                .catch((err) => {
+                    // Stok tidak cukup / gagal disimpan -> kembalikan qty ke nilai terakhir yang valid
+                    const maxAvail = err && err.max_available ? err.max_available : previousQty;
+                    qtyInput.value = maxAvail;
+                    row.dataset.lastConfirmedQty = maxAvail;
+                    recalcAll();
+
+                    indicator.classList.add('qty-error');
+                    indicator.textContent = (err && err.message) ? err.message : 'Stok tidak mencukupi';
+                    indicator.style.display = 'block';
+                    setTimeout(() => { indicator.style.display = 'none'; indicator.classList.remove('qty-error'); }, 3500);
                 });
         }
 

@@ -12,10 +12,8 @@ $routes->get('/', 'Home::index');
 
 // Katalog
 $routes->get('/catalog', 'Katalog::index');
-$routes->get('/item/(:num)', 'Katalog::detail/$1');
-
-// PUB-05: Cek Ketersediaan (AJAX, dipanggil dari halaman detail item)
-$routes->get('/item/cek-tersedia/(:num)', 'Katalog::cekTersedia/$1');
+$routes->get('/item/cek-tersedia/(:any)', 'Katalog::cekTersedia/$1');
+$routes->get('/item/(:any)', 'Katalog::detail/$1');
 
 // =====================================================
 // AVAILABILITY 

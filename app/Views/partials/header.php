@@ -17,6 +17,9 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
     <link
         href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="<?= base_url('assets/themify/themify-icons/themify-icons.css') ?>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <style>
         :root {
             --accent: #2563EB;
@@ -1768,14 +1771,20 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                 <a href="<?= base_url('/help') ?>">Bantuan</a>
 
             </nav>
+
             <div class="nav-actions">
                 <?php if (session()->get('customer_logged_in')): ?>
-                    <a href="<?= site_url('account/dashboard') ?>" class="btn btn-outline">Akun Saya</a>
+                    <a href="<?= site_url('account/dashboard') ?>" class="btn btn-outline">
+                        <i class="ti-user"></i>
+                    </a>
                 <?php else: ?>
-                    <a href="<?= site_url('account/login') ?>" class="btn btn-outline">Masuk</a>
+                    <a href="<?= site_url('account/login') ?>" class="btn btn-outline">
+                        <i class="ti-shift-right"></i>
+                    </a>
                 <?php endif; ?>
+                <button class="nav-toggle" type="button">&#9776;</button>
             </div>
-            <button class="nav-toggle" type="button">&#9776;</button>
+
         </div>
     </header>
 

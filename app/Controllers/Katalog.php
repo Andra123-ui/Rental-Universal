@@ -69,8 +69,13 @@ class Katalog extends BaseController
     ]);
   }
 
-  public function detail(int $id)
+  public function detail(string $hash)
   {
+    $id = id_decode($hash);
+    if ($id === null) {
+      throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+    }
+
     $catalogModel = new CatalogItemModel();
     $categoryModel = new CategoryModel();
     $mediaModel = new ItemMediaModel();
@@ -103,4 +108,36 @@ class Katalog extends BaseController
     ]);
   }
 
+  /**
+   * PUB-05: Cek Ketersediaan (AJAX, JSON response)
+   * Pakai AvailabilityModel supaya konsisten dengan Cart & Checkout —
+   * ikut hitung kapasitas resource, blackout, dan maintenance,
+   * bukan cuma cek overlap jadwal sederhana.
+   */
+  public function cekTersedia(string $hash)
+  {
+    $catalogItemId = id_decode($hash);
+    if ($catalogItemId === null) {
+      return $this->response->setStatusCode(404)->setJSON(['available' => false, 'message' => 'Item tidak ditemukan.']);
+    }
+
+    $startAt = $this->request->getGet('start_at');
+    $endAt = $this->request->getGet('end_at');
+    $qty = max(1, (int) ($this->request->getGet('qty') ?? 1));
+    $branchId = $this->request->getGet('branch_id') ? (int) $this->request->getGet('branch_id') : null;
+
+    if (empty($startAt) || empty($endAt)) {
+      return $this->response->setJSON(['available' => false, 'message' => 'Tanggal tidak lengkap']);
+    }
+
+    $availabilityModel = new \App\Models\AvailabilityModel();
+    $check = $availabilityModel->checkAvailability($catalogItemId, $branchId, $startAt, $endAt, $qty);
+
+    return $this->response->setJSON([
+      'available' => $check['status'] === 'available',
+      'status' => $check['status'], // available | limited | unavailable
+      'message' => $check['message'],
+      'available_units' => $check['available_units'],
+    ]);
+  }
 }

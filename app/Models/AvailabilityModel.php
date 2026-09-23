@@ -83,7 +83,8 @@ class AvailabilityModel extends Model
         }
 
         foreach ($rules as $rule) {
-            if ((int) $rule['is_available'] === 1
+            if (
+                (int) $rule['is_available'] === 1
                 && $time >= $rule['start_time']
                 && $time <= $rule['end_time']
             ) {
@@ -149,8 +150,8 @@ class AvailabilityModel extends Model
             ->where('start_at <', $endAt)
             ->where('end_at >', $startAt)
             ->groupStart()
-                ->where('catalog_item_id', $catalogItemId)
-                ->orWhereIn('resource_id', $resourceIds ?: [0]);
+            ->where('catalog_item_id', $catalogItemId)
+            ->orWhereIn('resource_id', $resourceIds ?: [0]);
 
         if ($branchId) {
             $builder->orWhere('branch_id', $branchId);
@@ -207,8 +208,8 @@ class AvailabilityModel extends Model
             ->whereIn('status', ['SCHEDULED', 'IN_PROGRESS'])
             ->where('start_at <', $endAt)
             ->groupStart()
-                ->where('end_at IS NULL')
-                ->orWhere('end_at >', $startAt)
+            ->where('end_at IS NULL')
+            ->orWhere('end_at >', $startAt)
             ->groupEnd()
             ->get()
             ->getResultArray();
@@ -233,8 +234,8 @@ class AvailabilityModel extends Model
 
         $resourceIds = array_column($resources, 'id');
 
-        $allocatedMap   = $this->getAllocatedQtyMap($resourceIds, $startAt, $endAt);
-        $blackoutMap    = $this->getBlackoutMap($catalogItemId, $resourceIds, $branchId, $startAt, $endAt);
+        $allocatedMap = $this->getAllocatedQtyMap($resourceIds, $startAt, $endAt);
+        $blackoutMap = $this->getBlackoutMap($catalogItemId, $resourceIds, $branchId, $startAt, $endAt);
         $maintenanceIds = $this->getMaintenanceBlockedIds($resourceIds, $startAt, $endAt);
 
         $totalAvailable = 0.0;
@@ -285,83 +286,83 @@ class AvailabilityModel extends Model
     public function estimatePrice(array $item, ?int $branchId, string $startAt, string $endAt, int $qty): array
     {
         $durationHours = max(0.01, (strtotime($endAt) - strtotime($startAt)) / 3600);
-        $durationDays  = $durationHours / 24;
-        $dayOfWeek     = (int) date('w', strtotime($startAt));
-        $date          = date('Y-m-d', strtotime($startAt));
-        $time          = date('H:i:s', strtotime($startAt));
+        $durationDays = $durationHours / 24;
+        $dayOfWeek = (int) date('w', strtotime($startAt));
+        $date = date('Y-m-d', strtotime($startAt));
+        $time = date('H:i:s', strtotime($startAt));
 
         $builder = $this->db->table('pricing_rules')
             ->where('catalog_item_id', $item['id'])
             ->where('is_active', 1)
             ->groupStart()
-                ->where('branch_id', $branchId)
-                ->orWhere('branch_id IS NULL')
+            ->where('branch_id', $branchId)
+            ->orWhere('branch_id IS NULL')
             ->groupEnd()
             ->groupStart()
-                ->where('day_of_week', $dayOfWeek)
-                ->orWhere('day_of_week IS NULL')
+            ->where('day_of_week', $dayOfWeek)
+            ->orWhere('day_of_week IS NULL')
             ->groupEnd()
             ->groupStart()
-                ->where('start_date IS NULL')
-                ->orWhere('start_date <=', $date)
+            ->where('start_date IS NULL')
+            ->orWhere('start_date <=', $date)
             ->groupEnd()
             ->groupStart()
-                ->where('end_date IS NULL')
-                ->orWhere('end_date >=', $date)
+            ->where('end_date IS NULL')
+            ->orWhere('end_date >=', $date)
             ->groupEnd()
             ->groupStart()
-                ->where('start_time IS NULL')
-                ->orWhere('start_time <=', $time)
+            ->where('start_time IS NULL')
+            ->orWhere('start_time <=', $time)
             ->groupEnd()
             ->groupStart()
-                ->where('end_time IS NULL')
-                ->orWhere('end_time >=', $time)
+            ->where('end_time IS NULL')
+            ->orWhere('end_time >=', $time)
             ->groupEnd()
             ->groupStart()
-                ->where('min_duration IS NULL')
-                ->orWhere('min_duration <=', $durationHours)
+            ->where('min_duration IS NULL')
+            ->orWhere('min_duration <=', $durationHours)
             ->groupEnd()
             ->groupStart()
-                ->where('max_duration IS NULL')
-                ->orWhere('max_duration >=', $durationHours)
+            ->where('max_duration IS NULL')
+            ->orWhere('max_duration >=', $durationHours)
             ->groupEnd()
             ->groupStart()
-                ->where('min_qty IS NULL')
-                ->orWhere('min_qty <=', $qty)
+            ->where('min_qty IS NULL')
+            ->orWhere('min_qty <=', $qty)
             ->groupEnd()
             ->groupStart()
-                ->where('max_qty IS NULL')
-                ->orWhere('max_qty >=', $qty)
+            ->where('max_qty IS NULL')
+            ->orWhere('max_qty >=', $qty)
             ->groupEnd()
             ->orderBy('priority', 'DESC');
 
         $rule = $builder->get()->getRowArray();
 
         if (!$rule) {
-    $durationHours = max(0.01, (strtotime($endAt) - strtotime($startAt)) / 3600);
-    $durationDays  = $durationHours / 24;
+            $durationHours = max(0.01, (strtotime($endAt) - strtotime($startAt)) / 3600);
+            $durationDays = $durationHours / 24;
 
-    switch ($item['pricing_unit']) {
-        case 'SESSION':
-            $units = 1;
-            break;
-        case 'NIGHT':
-        case 'DAY':
-        default:
-            $units = max(1, (int) ceil($durationDays));
-            break;
-    }
+            switch ($item['pricing_unit']) {
+                case 'SESSION':
+                    $units = 1;
+                    break;
+                case 'NIGHT':
+                case 'DAY':
+                default:
+                    $units = max(1, (int) ceil($durationDays));
+                    break;
+            }
 
-    $subtotal = $item['base_price'] * $units * $qty;
+            $subtotal = $item['base_price'] * $units * $qty;
 
-    return [
-        'unit_price' => (float) $item['base_price'],
-        'basis'      => 'base_price per ' . strtolower($item['pricing_unit']) . ' (tidak ada pricing_rule yang cocok)',
-        'units'      => $units,
-        'qty'        => $qty,
-        'subtotal'   => (float) $subtotal,
-    ];
-}
+            return [
+                'unit_price' => (float) $item['base_price'],
+                'basis' => 'base_price per ' . strtolower($item['pricing_unit']) . ' (tidak ada pricing_rule yang cocok)',
+                'units' => $units,
+                'qty' => $qty,
+                'subtotal' => (float) $subtotal,
+            ];
+        }
 
         $priceValue = (float) $rule['price_value'];
 
@@ -384,10 +385,10 @@ class AvailabilityModel extends Model
 
         return [
             'unit_price' => $priceValue,
-            'basis'      => $rule['name'] . ' (' . $rule['value_type'] . ')',
-            'units'      => $units,
-            'qty'        => $qty,
-            'subtotal'   => (float) $subtotal,
+            'basis' => $rule['name'] . ' (' . $rule['value_type'] . ')',
+            'units' => $units,
+            'qty' => $qty,
+            'subtotal' => (float) $subtotal,
         ];
     }
 
@@ -402,7 +403,7 @@ class AvailabilityModel extends Model
         for ($i = 1; $i <= $maxTries && count($alternatives) < 3; $i++) {
             foreach ([1, -1] as $direction) {
                 $newStart = date('Y-m-d H:i:s', strtotime($startAt) + ($direction * $i * 86400));
-                $newEnd   = date('Y-m-d H:i:s', strtotime($newStart) + $durationSec);
+                $newEnd = date('Y-m-d H:i:s', strtotime($newStart) + $durationSec);
 
                 $check = $this->checkAvailability($catalogItemId, $branchId, $newStart, $newEnd, $qty);
                 if ($check['status'] === 'available') {
@@ -418,39 +419,39 @@ class AvailabilityModel extends Model
     }
 
     /**
- * Breakdown ketersediaan per cabang untuk item ini pada rentang waktu tertentu.
- */
-public function checkAvailabilityByBranch(int $catalogItemId, string $startAt, string $endAt, int $qty): array
-{
-    $branchRows = $this->db->table('resources')
-        ->select('branch_id')
-        ->distinct()
-        ->where('catalog_item_id', $catalogItemId)
-        ->where('status', 'AVAILABLE')
-        ->where('deleted_at IS NULL')
-        ->get()
-        ->getResultArray();
+     * Breakdown ketersediaan per cabang untuk item ini pada rentang waktu tertentu.
+     */
+    public function checkAvailabilityByBranch(int $catalogItemId, string $startAt, string $endAt, int $qty): array
+    {
+        $branchRows = $this->db->table('resources')
+            ->select('branch_id')
+            ->distinct()
+            ->where('catalog_item_id', $catalogItemId)
+            ->where('status', 'AVAILABLE')
+            ->where('deleted_at IS NULL')
+            ->get()
+            ->getResultArray();
 
-    $results = [];
-    foreach ($branchRows as $row) {
-        $branchId = $row['branch_id'] !== null ? (int) $row['branch_id'] : null;
-        $check = $this->checkAvailability($catalogItemId, $branchId, $startAt, $endAt, $qty);
+        $results = [];
+        foreach ($branchRows as $row) {
+            $branchId = $row['branch_id'] !== null ? (int) $row['branch_id'] : null;
+            $check = $this->checkAvailability($catalogItemId, $branchId, $startAt, $endAt, $qty);
 
-        $branchName = 'Lokasi Utama';
-if ($branchId) {
-    $branch = $this->db->table('branches')->select('branch_name')->where('id', $branchId)->get()->getRowArray();
-    $branchName = $branch['branch_name'] ?? ('Cabang #' . $branchId);
-}
+            $branchName = 'Lokasi Utama';
+            if ($branchId) {
+                $branch = $this->db->table('branches')->select('branch_name')->where('id', $branchId)->get()->getRowArray();
+                $branchName = $branch['branch_name'] ?? ('Cabang #' . $branchId);
+            }
 
-        $results[] = [
-            'branch_id'       => $branchId,
-            'branch_name'     => $branchName,
-            'status'          => $check['status'],
-            'message'         => $check['message'],
-            'available_units' => $check['available_units'],
-        ];
+            $results[] = [
+                'branch_id' => $branchId,
+                'branch_name' => $branchName,
+                'status' => $check['status'],
+                'message' => $check['message'],
+                'available_units' => $check['available_units'],
+            ];
+        }
+
+        return $results;
     }
-
-    return $results;
-}
 }
