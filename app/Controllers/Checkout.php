@@ -25,8 +25,13 @@ class Checkout extends BaseController
             return redirect()->to('/cart')->with('error', 'Keranjang Anda masih kosong.');
         }
 
-        // Kalau customer sudah login via OTP, prefill data
-        $loggedCustomer = session()->get('customer');
+        // Kalau customer sudah login via OTP (lihat AuthController::verifyOtp()),
+        // ambil data lengkapnya dari DB pakai customer_id di session.
+        $loggedCustomer = null;
+        if (session()->get('customer_logged_in')) {
+            $customerModel = new CustomerModel();
+            $loggedCustomer = $customerModel->find(session()->get('customer_id'));
+        }
 
         return view('pub/checkout_customer', [
             'loggedCustomer' => $loggedCustomer,
@@ -38,17 +43,22 @@ class Checkout extends BaseController
         $rules = [
             'name' => 'required|min_length[3]',
             'phone' => 'required|min_length[9]',
+            'agree_terms' => 'required',
         ];
         if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+            return redirect()->back()->withInput()->with('errors', [
+                'Nama, nomor HP, dan persetujuan syarat & ketentuan wajib diisi/dicentang.',
+            ]);
         }
+
+        $authMode = $this->request->getPost('auth_mode'); // 'guest' atau 'account'
 
         $data = [
             'name' => $this->request->getPost('name'),
             'phone' => $this->request->getPost('phone'),
             'email' => $this->request->getPost('email'),
             'notes' => $this->request->getPost('notes'),
-            'is_guest' => session()->get('customer') ? false : true,
+            'is_guest' => $authMode !== 'account',
             // Pelacakan persetujuan syarat & ketentuan (PUB-16 business rule):
             // simpan versi terms + timestamp persetujuan, bukan cuma boolean.
             'terms_agreed_version' => $this->request->getPost('terms_version'),

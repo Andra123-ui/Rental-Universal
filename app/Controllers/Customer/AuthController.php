@@ -23,17 +23,17 @@ class AuthController extends BaseController
     // Pesan generik untuk error verifikasi — tidak membedakan salah/expired/blocked
     // secara teknis ke user, tapi cukup jelas supaya user tahu harus apa.
     protected const ERR_INVALID_CODE = 'Kode OTP salah. Silakan coba lagi.';
-    protected const ERR_EXPIRED      = 'Kode OTP sudah tidak berlaku. Silakan minta kode baru.';
-    protected const ERR_BLOCKED      = 'Terlalu banyak percobaan salah. Silakan minta kode baru.';
-    protected const ERR_NO_SESSION   = 'Sesi login tidak ditemukan. Silakan mulai ulang dari halaman login.';
+    protected const ERR_EXPIRED = 'Kode OTP sudah tidak berlaku. Silakan minta kode baru.';
+    protected const ERR_BLOCKED = 'Terlalu banyak percobaan salah. Silakan minta kode baru.';
+    protected const ERR_NO_SESSION = 'Sesi login tidak ditemukan. Silakan mulai ulang dari halaman login.';
 
     public function __construct()
     {
-        $this->customerModel     = new CustomerModel();
-        $this->accountModel      = new CustomerAccountModel();
-        $this->otpModel          = new CustomerLoginOtpModel();
-        $this->otpService        = new OtpService();
-        $this->activityLogModel  = new ActivityLogModel();
+        $this->customerModel = new CustomerModel();
+        $this->accountModel = new CustomerAccountModel();
+        $this->otpModel = new CustomerLoginOtpModel();
+        $this->otpService = new OtpService();
+        $this->activityLogModel = new ActivityLogModel();
     }
 
     /**
@@ -71,7 +71,7 @@ class AuthController extends BaseController
         }
 
         $rawPhone = (string) $this->request->getPost('phone');
-        $ip       = $this->request->getIPAddress();
+        $ip = $this->request->getIPAddress();
         $userAgent = (string) $this->request->getUserAgent();
 
         $phone = $this->otpService->normalizePhone($rawPhone);
@@ -103,14 +103,14 @@ class AuthController extends BaseController
         // Nama diisi placeholder (nomor HP itu sendiri) dan dilengkapi nanti di CAUTH-03.
         if ($account === null) {
             $customerId = $this->customerModel->insert([
-                'name'  => $phone,
+                'name' => $phone,
                 'phone' => $phone,
             ], true);
 
             $accountId = $this->accountModel->insert([
                 'customer_id' => $customerId,
                 'login_phone' => $phone,
-                'status'      => CustomerAccountModel::STATUS_PENDING,
+                'status' => CustomerAccountModel::STATUS_PENDING,
             ], true);
 
             $account = $this->accountModel->find($accountId);
@@ -123,20 +123,20 @@ class AuthController extends BaseController
         // (tetap dapat OTP), tapi WAJIB ditolak saat verifikasi di CAUTH-02.
         // Jangan tambahkan pengecekan suspended di titik ini.
 
-        $code     = $this->otpService->generateCode();
+        $code = $this->otpService->generateCode();
         $codeHash = $this->otpService->hashCode($code);
 
         $this->otpModel->insert([
             'customer_account_id' => $account['id'],
-            'phone'                => $phone,
-            'purpose'              => CustomerLoginOtpModel::PURPOSE_LOGIN,
-            'code_hash'            => $codeHash,
-            'expires_at'           => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
-            'attempt_count'        => 0,
-            'max_attempts'         => 5,
-            'status'               => CustomerLoginOtpModel::STATUS_PENDING,
-            'requested_ip'         => $ip,
-            'user_agent'           => $userAgent,
+            'phone' => $phone,
+            'purpose' => CustomerLoginOtpModel::PURPOSE_LOGIN,
+            'code_hash' => $codeHash,
+            'expires_at' => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
+            'attempt_count' => 0,
+            'max_attempts' => 5,
+            'status' => CustomerLoginOtpModel::STATUS_PENDING,
+            'requested_ip' => $ip,
+            'user_agent' => $userAgent,
         ]);
 
         $sent = $this->otpService->sendViaWhatsapp($phone, $code);
@@ -176,7 +176,7 @@ class AuthController extends BaseController
         }
 
         $account = $this->accountModel->findByLoginPhone($phone);
-        $otp     = $account ? $this->otpModel->latestPendingByAccountId((int) $account['id']) : null;
+        $otp = $account ? $this->otpModel->latestPendingByAccountId((int) $account['id']) : null;
 
         // Kalau tidak ada OTP nyata (akun tidak ditemukan / OTP sudah tidak pending),
         // pakai waktu display dari session supaya countdown tetap konsisten
@@ -184,8 +184,8 @@ class AuthController extends BaseController
         $expiresAt = $otp['expires_at'] ?? session()->get('customer_login_otp_display_expires_at');
 
         return view('customer/verify', [
-            'maskedPhone'    => $this->otpService->maskPhone($phone),
-            'expiresAt'      => $expiresAt,
+            'maskedPhone' => $this->otpService->maskPhone($phone),
+            'expiresAt' => $expiresAt,
             'resendCooldown' => OtpService::RESEND_COOLDOWN_SECONDS,
         ]);
     }
@@ -196,8 +196,8 @@ class AuthController extends BaseController
      */
     public function verifyOtp()
     {
-        $phone     = session()->get('customer_login_phone');
-        $ip        = $this->request->getIPAddress();
+        $phone = session()->get('customer_login_phone');
+        $ip = $this->request->getIPAddress();
         $userAgent = (string) $this->request->getUserAgent();
 
         if (!$phone) {
@@ -210,7 +210,7 @@ class AuthController extends BaseController
                 ->with('errors', ['code' => self::ERR_INVALID_CODE]);
         }
 
-        $code    = (string) $this->request->getPost('code');
+        $code = (string) $this->request->getPost('code');
         $account = $this->accountModel->findByLoginPhone($phone);
 
         // Nomor tidak terdaftar -> tidak pernah ada OTP asli yang cocok,
@@ -222,7 +222,7 @@ class AuthController extends BaseController
         }
 
         $accountId = (int) $account['id'];
-        $otp       = $this->otpModel->latestPendingByAccountId($accountId);
+        $otp = $this->otpModel->latestPendingByAccountId($accountId);
 
         if ($otp === null) {
             return redirect()->to(site_url('account/verify'))
@@ -292,10 +292,10 @@ class AuthController extends BaseController
 
         $this->accountModel->update((int) $accountId, [
             'phone_verified_at' => date('Y-m-d H:i:s'),
-            'status'            => CustomerAccountModel::STATUS_ACTIVE,
-            'last_login_at'     => date('Y-m-d H:i:s'),
-            'last_login_ip'     => $ip,
-            'failed_attempts'   => 0,
+            'status' => CustomerAccountModel::STATUS_ACTIVE,
+            'last_login_at' => date('Y-m-d H:i:s'),
+            'last_login_ip' => $ip,
+            'failed_attempts' => 0,
         ]);
 
         // Rotate session ID setelah login berhasil (cegah session fixation)
@@ -303,7 +303,7 @@ class AuthController extends BaseController
 
         session()->set([
             'customer_logged_in' => true,
-            'customer_id'         => $account['customer_id'],
+            'customer_id' => $account['customer_id'],
             'customer_account_id' => $account['id'],
         ]);
         session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
@@ -327,8 +327,8 @@ class AuthController extends BaseController
      */
     public function resendOtp()
     {
-        $phone     = session()->get('customer_login_phone');
-        $ip        = $this->request->getIPAddress();
+        $phone = session()->get('customer_login_phone');
+        $ip = $this->request->getIPAddress();
         $userAgent = (string) $this->request->getUserAgent();
 
         if (!$phone) {
@@ -361,33 +361,33 @@ class AuthController extends BaseController
 
         if ($account === null) {
             $customerId = $this->customerModel->insert([
-                'name'  => $phone,
+                'name' => $phone,
                 'phone' => $phone,
             ], true);
 
             $accountId = $this->accountModel->insert([
                 'customer_id' => $customerId,
                 'login_phone' => $phone,
-                'status'      => CustomerAccountModel::STATUS_PENDING,
+                'status' => CustomerAccountModel::STATUS_PENDING,
             ], true);
         } else {
             $accountId = $account['id'];
         }
 
-        $code     = $this->otpService->generateCode();
+        $code = $this->otpService->generateCode();
         $codeHash = $this->otpService->hashCode($code);
 
         $this->otpModel->insert([
             'customer_account_id' => $accountId,
-            'phone'                => $phone,
-            'purpose'              => CustomerLoginOtpModel::PURPOSE_LOGIN,
-            'code_hash'            => $codeHash,
-            'expires_at'           => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
-            'attempt_count'        => 0,
-            'max_attempts'         => 5,
-            'status'               => CustomerLoginOtpModel::STATUS_PENDING,
-            'requested_ip'         => $ip,
-            'user_agent'           => $userAgent,
+            'phone' => $phone,
+            'purpose' => CustomerLoginOtpModel::PURPOSE_LOGIN,
+            'code_hash' => $codeHash,
+            'expires_at' => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
+            'attempt_count' => 0,
+            'max_attempts' => 5,
+            'status' => CustomerLoginOtpModel::STATUS_PENDING,
+            'requested_ip' => $ip,
+            'user_agent' => $userAgent,
         ]);
 
         $sent = $this->otpService->sendViaWhatsapp($phone, $code);
@@ -414,6 +414,40 @@ class AuthController extends BaseController
         session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
 
         return redirect()->to(site_url('account/login'));
+    }
+
+    /**
+     * GET /account/logout
+     * Hapus session customer (logout), kembali ke return_url kalau ada
+     * (misal dari halaman checkout), atau ke beranda.
+     */
+    public function logout()
+    {
+        $ip = $this->request->getIPAddress();
+        $userAgent = (string) $this->request->getUserAgent();
+        $accountId = session()->get('customer_account_id');
+
+        if ($accountId) {
+            // Pakai string literal 'LOGOUT' karena constant EVENT_LOGOUT belum
+            // tentu didefinisikan di ActivityLogModel — kalau Anda sudah punya
+            // constant itu, boleh diganti jadi ActivityLogModel::EVENT_LOGOUT.
+            $this->activityLogModel->record(
+                'LOGOUT',
+                (int) $accountId,
+                $ip,
+                $userAgent
+            );
+        }
+
+        session()->remove(['customer_logged_in', 'customer_id', 'customer_account_id']);
+        session()->regenerate(true); // cegah session fixation setelah logout juga
+
+        $returnUrl = $this->request->getGet('return_url');
+        if ($returnUrl !== null && $this->isSafeReturnUrl($returnUrl)) {
+            return redirect()->to(site_url(ltrim($returnUrl, '/')));
+        }
+
+        return redirect()->to(site_url('/'));
     }
 
     /**
