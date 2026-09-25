@@ -14,6 +14,7 @@ $routes->get('/', 'Home::index');
 $routes->get('/catalog', 'Katalog::index');
 $routes->get('/item/cek-tersedia/(:any)', 'Katalog::cekTersedia/$1');
 $routes->get('/item/(:any)', 'Katalog::detail/$1');
+$routes->get('item/kalender-tersedia/(:segment)', 'Katalog::kalenderTersedia/$1');
 
 // =====================================================
 // AVAILABILITY 
@@ -38,19 +39,39 @@ $routes->get('/cart/hapus/(:segment)', 'Cart::hapus/$1');
 // CHECKOUT
 // =====================================================
 
-$routes->get('/checkout', 'Checkout::index');
+// Wajib login untuk masuk checkout
+$routes->get('/checkout', 'Checkout::index', [
+    'filter' => 'customerAuth'
+]);
 
-// PUB-07: simpan data penyewa (guest atau hasil login OTP)
-$routes->post('/checkout/simpan-customer', 'Checkout::simpanCustomer');
+// Simpan data customer
+$routes->post('/checkout/simpan-customer', 'Checkout::simpanCustomer', [
+    'filter' => 'customerAuth'
+]);
 
-$routes->get('/checkout/fulfillment', 'Checkout::fulfillment');
-$routes->post('/checkout/fulfillment', 'Checkout::simpanFulfillment');
+// Fulfillment
+$routes->get('/checkout/fulfillment', 'Checkout::fulfillment', [
+    'filter' => 'customerAuth'
+]);
 
-$routes->get('/checkout/review', 'Checkout::review');
+$routes->post('/checkout/fulfillment', 'Checkout::simpanFulfillment', [
+    'filter' => 'customerAuth'
+]);
 
-$routes->post('/checkout/proses', 'Checkout::proses');
+// Review
+$routes->get('/checkout/review', 'Checkout::review', [
+    'filter' => 'customerAuth'
+]);
 
-$routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1');
+// Proses checkout
+$routes->post('/checkout/proses', 'Checkout::proses', [
+    'filter' => 'customerAuth'
+]);
+
+// Berhasil
+$routes->get('/checkout/berhasil/(:segment)', 'Checkout::berhasil/$1', [
+    'filter' => 'customerAuth'
+]);
 
 // =====================================================
 // CEK BOOKING (guest, tanpa login)

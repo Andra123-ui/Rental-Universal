@@ -454,4 +454,40 @@ class AvailabilityModel extends Model
 
         return $results;
     }
+
+    public function getMonthlyAvailability(int $catalogItemId, ?int $branchId, int $year, int $month): array
+{
+    $resources = $this->getCandidateResources($catalogItemId, $branchId);
+
+    $totalStock = 0.0;
+    foreach ($resources as $res) {
+        $totalStock += $res['capacity'] !== null ? (float) $res['capacity'] : 1.0;
+    }
+
+    $monthStartDate = sprintf('%04d-%02d-01', $year, $month);
+    $daysInMonth = (int) date('t', strtotime($monthStartDate));
+
+    $calendar = [];
+    for ($d = 1; $d <= $daysInMonth; $d++) {
+        $dayStart = sprintf('%04d-%02d-%02d 00:00:00', $year, $month, $d);
+        $dayEnd   = date('Y-m-d 00:00:00', strtotime($dayStart . ' +1 day'));
+
+        $check = $this->checkAvailability($catalogItemId, $branchId, $dayStart, $dayEnd, 1);
+
+        $available = min($totalStock, (float) $check['available_units']);
+        $booked    = max(0, $totalStock - $available);
+
+        $dateKey = sprintf('%04d-%02d-%02d', $year, $month, $d);
+        $calendar[$dateKey] = [
+            'total'     => $totalStock,
+            'booked'    => $booked,
+            'available' => $available,
+            'status'    => $totalStock <= 0 ? 'unavailable' : $check['status'],
+        ];
+    }
+
+    return $calendar;
+}
+
+
 }

@@ -69,7 +69,7 @@ class Katalog extends BaseController
     ]);
   }
 
-  public function detail(string $hash)
+    public function detail(string $hash)
   {
     $id = id_decode($hash);
     if ($id === null) {
@@ -99,12 +99,26 @@ class Katalog extends BaseController
     $relatedIds = array_column($related, 'id');
     $relatedImages = $mediaModel->getPrimaryImageMap($relatedIds);
 
+    // Kalender ketersediaan: dihitung langsung di sini (server-side), digabung
+    // untuk 3 bulan ke depan (bulan ini + 2 bulan berikutnya), jadi view tidak
+    // perlu AJAX/route terpisah lagi.
+    $availabilityModel = new \App\Models\AvailabilityModel();
+    $calendarData = [];
+    $cursor = new \DateTime('first day of this month');
+    for ($i = 0; $i < 3; $i++) {
+      $y = (int) $cursor->format('Y');
+      $m = (int) $cursor->format('n');
+      $calendarData += $availabilityModel->getMonthlyAvailability($id, null, $y, $m);
+      $cursor->modify('+1 month');
+    }
+
     return view('pub/katalog_detail', [
       'item' => $item,
       'category' => $category,
       'related' => $related,
       'gallery' => $gallery,
       'relatedImages' => $relatedImages,
+      'calendarData' => $calendarData,
     ]);
   }
 
@@ -140,4 +154,27 @@ class Katalog extends BaseController
       'available_units' => $check['available_units'],
     ]);
   }
+
+  public function kalenderTersedia(string $hash)
+{
+    $catalogItemId = id_decode($hash);
+    if ($catalogItemId === null) {
+        return $this->response->setStatusCode(404)->setJSON(['message' => 'Item tidak ditemukan.']);
+    }
+
+    $bulan = $this->request->getGet('bulan');
+    if (empty($bulan) || !preg_match('/^\d{4}-\d{2}$/', $bulan)) {
+        $bulan = date('Y-m');
+    }
+    [$year, $month] = array_map('intval', explode('-', $bulan));
+    $branchId = $this->request->getGet('branch_id') ? (int) $this->request->getGet('branch_id') : null;
+
+    $availabilityModel = new \App\Models\AvailabilityModel();
+    $calendar = $availabilityModel->getMonthlyAvailability($catalogItemId, $branchId, $year, $month);
+
+    return $this->response->setJSON([
+        'bulan'    => $bulan,
+        'calendar' => $calendar,
+    ]);
+}
 }

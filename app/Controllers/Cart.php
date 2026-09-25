@@ -13,6 +13,7 @@ class Cart extends BaseController
     {
         $cart = session()->get(self::SESSION_KEY) ?? [];
         $catalogModel = new CatalogItemModel();
+        $availabilityModel = new AvailabilityModel();
         $items = [];
         $subtotal = 0;
 
@@ -22,8 +23,16 @@ class Cart extends BaseController
                 continue;
             }
 
-            $unit = $product['base_price'] * $line['qty'];
-            $subtotal += $unit;
+            $priceEstimate = $availabilityModel->estimatePrice(
+                $product,
+                $line['branch_id'] ?? null,
+                $line['start_at'],
+                $line['end_at'],
+                (int) $line['qty']
+            );
+
+            $lineTotal = $priceEstimate['subtotal'];
+            $subtotal += $lineTotal;
 
             $items[] = [
                 'key' => $key,
@@ -31,7 +40,8 @@ class Cart extends BaseController
                 'qty' => $line['qty'],
                 'start_at' => $line['start_at'],
                 'end_at' => $line['end_at'],
-                'line_total' => $unit,
+                'line_total' => $lineTotal,
+                'price_detail' => $priceEstimate,
             ];
         }
 
@@ -162,7 +172,16 @@ class Cart extends BaseController
                 if (!$product) {
                     continue;
                 }
-                $t = $product['base_price'] * $l['qty'];
+
+                $priceEstimate = $availabilityModel->estimatePrice(
+                    $product,
+                    $l['branch_id'] ?? null,
+                    $l['start_at'],
+                    $l['end_at'],
+                    (int) $l['qty']
+                );
+
+                $t = $priceEstimate['subtotal'];
                 $subtotal += $t;
                 if ($k === $key) {
                     $lineTotal = $t;
@@ -187,4 +206,4 @@ class Cart extends BaseController
 
         return redirect()->to('/cart')->with('success', 'Item dihapus dari keranjang.');
     }
-}
+} 

@@ -18,8 +18,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             <a href="<?= base_url('/') ?>">Beranda</a> /
             <a href="<?= base_url('/catalog') ?>">Katalog</a>
             <?php if ($category): ?> / <a href="<?= base_url('/catalog?kategori=' . $category['slug']) ?>">
-                    <?= esc($category['name']) ?>
-                </a>
+                <?= esc($category['name']) ?>
+            </a>
             <?php endif; ?>
         </div>
         <h1>
@@ -37,13 +37,13 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                 </div>
 
                 <?php if (count($gallery) > 1): ?>
-                    <div style="display:flex;gap:10px;margin-top:12px;">
-                        <?php foreach ($gallery as $g): ?>
-                            <div
-                                style="width:70px;height:56px;border-radius:4px;background-image:url('<?= esc(item_image_url($g['file_path'])) ?>');background-size:cover;background-position:center;border:1px solid var(--line);">
-                            </div>
-                        <?php endforeach; ?>
+                <div style="display:flex;gap:10px;margin-top:12px;">
+                    <?php foreach ($gallery as $g): ?>
+                    <div
+                        style="width:70px;height:56px;border-radius:4px;background-image:url('<?= esc(item_image_url($g['file_path'])) ?>');background-size:cover;background-position:center;border:1px solid var(--line);">
                     </div>
+                    <?php endforeach; ?>
+                </div>
                 <?php endif; ?>
 
                 <div class="detail-info" style="margin-top:24px;">
@@ -66,113 +66,499 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     </p>
 
                     <?php if (!empty($item['deposit_amount']) && $item['deposit_amount'] > 0): ?>
-                        <div class="alert-box alert-info" style="margin-top:20px;">
-                            Deposit/jaminan sebesar <strong>Rp
-                                <?= number_format($item['deposit_amount'], 0, ',', '.') ?>
-                            </strong> berlaku untuk item ini dan akan dikembalikan sesuai syarat & ketentuan.
-                        </div>
+                    <div class="alert-box alert-info" style="margin-top:20px;">
+                        Deposit/jaminan sebesar <strong>Rp
+                            <?= number_format($item['deposit_amount'], 0, ',', '.') ?>
+                        </strong> berlaku untuk item ini dan akan dikembalikan sesuai syarat & ketentuan.
+                    </div>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- Booking card: cek ketersediaan + tambah ke keranjang -->
+            <!-- Booking card: kalender ketersediaan + tambah ke keranjang -->
+            <!-- Booking card: kalender ketersediaan + tambah ke keranjang -->
             <div class="booking-card">
                 <h3>Cek Ketersediaan</h3>
-                <form id="form-cek-tersedia" method="post" action="<?= base_url('/cart/tambah') ?>">
+
+                <div class="cal-legend">
+                    <span><i class="dot dot-ok"></i> Tersedia</span>
+                    <span><i class="dot dot-limited"></i> Terbatas</span>
+                    <span><i class="dot dot-full"></i> Habis</span>
+                </div>
+
+                <div class="cal-header">
+                    <button type="button" id="cal-prev" class="cal-nav">&lsaquo;</button>
+                    <div id="cal-title" class="cal-title">-</div>
+                    <button type="button" id="cal-next" class="cal-nav">&rsaquo;</button>
+                </div>
+                <div id="cal-dow" class="cal-dow"></div>
+                <div id="cal-grid" class="cal-grid"></div>
+
+                <div id="cal-selection" class="cal-selection">
+                    <p class="cs-title">Pilih tanggal mulai di kalender.</p>
+                </div>
+
+                <form id="form-tambah-cart" method="post" action="<?= base_url('/cart/tambah') ?>">
                     <input type="hidden" name="catalog_item_id" value="<?= esc($item['id']) ?>">
+                    <input type="hidden" name="start_at" id="input_start_at">
+                    <input type="hidden" name="qty" value="1">
+                    <input type="hidden" name="end_at" id="input_end_at">
                     <?= csrf_field() ?>
 
-                    <div class="field-group">
-                        <label for="start_at">Tanggal/Jam Mulai</label>
-                        <input type="datetime-local" id="start_at" name="start_at" required>
-                    </div>
-                    <div class="field-group">
-                        <label for="end_at">Tanggal/Jam Selesai</label>
-                        <input type="datetime-local" id="end_at" name="end_at" required>
-                    </div>
-                    <div class="field-group">
-                        <label for="qty">Jumlah</label>
-                        <input type="number" id="qty" name="qty" min="1" value="1">
-                    </div>
-
-                    <div id="avail-result"></div>
-
-                    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px;">
-                        <button type="button" id="btn-cek" class="btn btn-outline"
-                            style="width:100%;justify-content:center;">Cek Ketersediaan</button>
-                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;">Tambah
-                            ke Keranjang</button>
-                    </div>
+                    <button type="submit" id="btn-tambah" class="btn btn-primary"
+                        style="width:100%;justify-content:center;margin-top:16px;" disabled>Tambah ke Keranjang</button>
                 </form>
             </div>
         </div>
 
         <?php if (!empty($related)): ?>
-            <div class="section-head" style="margin-top:64px;">
-                <h2>Produk sejenis</h2>
-            </div>
-            <div class="card-grid">
-                <?php foreach ($related as $r):
+        <div class="section-head" style="margin-top:64px;">
+            <h2>Produk sejenis</h2>
+        </div>
+        <div class="card-grid">
+            <?php foreach ($related as $r):
                     $ru = $r['unit_label'];
                     $rImg = item_image_url($relatedImages[$r['id']] ?? null, 'item-' . $r['id']);
                     ?>
-                    <div class="item-card">
-                        <div class="item-media"
-                            style="background-image:url('<?= esc($rImg) ?>');background-size:cover;background-position:center;">
+            <div class="item-card">
+                <div class="item-media"
+                    style="background-image:url('<?= esc($rImg) ?>');background-size:cover;background-position:center;">
+                </div>
+                <div class="item-body">
+                    <span class="item-type">
+                        <?= esc($r['item_type']) ?>
+                    </span>
+                    <h3>
+                        <?= esc($r['name']) ?>
+                    </h3>
+                    <div class="item-footer">
+                        <div class="item-price">Rp
+                            <?= number_format($r['base_price'], 0, ',', '.') ?> <small>/
+                                <?= esc($ru) ?>
+                            </small>
                         </div>
-                        <div class="item-body">
-                            <span class="item-type">
-                                <?= esc($r['item_type']) ?>
-                            </span>
-                            <h3>
-                                <?= esc($r['name']) ?>
-                            </h3>
-                            <div class="item-footer">
-                                <div class="item-price">Rp
-                                    <?= number_format($r['base_price'], 0, ',', '.') ?> <small>/
-                                        <?= esc($ru) ?>
-                                    </small>
-                                </div>
-                                <a href="<?= base_url('/item/' . id_encode($r['id'])) ?>" class="btn btn-outline"
-                                    style="padding:8px 14px;font-size:0.85rem;">Detail</a>
-                            </div>
-                        </div>
+                        <a href="<?= base_url('/item/' . id_encode($r['id'])) ?>" class="btn btn-outline"
+                            style="padding:8px 14px;font-size:0.85rem;">Detail</a>
                     </div>
-                <?php endforeach; ?>
+                </div>
             </div>
+            <?php endforeach; ?>
+        </div>
         <?php endif; ?>
     </div>
 </section>
 
+<style>
+.cal-legend {
+    display: flex;
+    gap: 14px;
+    font-size: .78rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.cal-legend .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.dot-ok {
+    background: #16a34a;
+}
+
+.dot-limited {
+    background: #f59e0b;
+}
+
+.dot-full {
+    background: #dc2626;
+}
+
+.cal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.cal-title {
+    font-weight: 600;
+    font-size: .95rem;
+}
+
+.cal-nav {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.cal-nav:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+}
+
+.cal-dow {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    font-size: .72rem;
+    color: var(--muted);
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+}
+
+.cal-day {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: .75rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    user-select: none;
+}
+
+.cal-day .d-num {
+    font-weight: 600;
+}
+
+.cal-day .d-info {
+    font-size: .58rem;
+    opacity: .85;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.cal-day.empty {
+    visibility: hidden;
+    cursor: default;
+}
+
+.cal-day.past {
+    opacity: .3;
+    cursor: not-allowed;
+}
+
+.cal-day.ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cal-day.limited {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.cal-day.full {
+    background: #fee2e2;
+    color: #991b1b;
+    cursor: not-allowed;
+}
+
+.cal-day.selected {
+    outline: 2px solid #2563eb;
+    outline-offset: -2px;
+}
+
+.cal-day.in-range {
+    outline: 1px dashed #2563eb;
+    outline-offset: -2px;
+}
+
+.cal-selection {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--surface, #f5f5f5);
+    border: 1px solid var(--line);
+    transition: background .15s, border-color .15s;
+}
+
+.cal-selection .cs-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.cal-selection .cs-sub {
+    margin: 4px 0 0;
+    font-size: .82rem;
+    color: var(--muted);
+}
+
+.cal-selection.cs-ok {
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.cal-selection.cs-ok .cs-title {
+    color: #166534;
+}
+
+.cal-selection.cs-limited {
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+
+.cal-selection.cs-limited .cs-title {
+    color: #92400e;
+}
+
+.cal-selection.cs-full {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.cal-selection.cs-full .cs-title {
+    color: #991b1b;
+}
+</style>
+
 <script>
-    document.getElementById('btn-cek').addEventListener('click', async function () {
-        const startAt = document.getElementById('start_at').value;
-        const endAt = document.getElementById('end_at').value;
-        const result = document.getElementById('avail-result');
+(function() {
+    const CALENDAR_DATA = <?= json_encode($calendarData) ?>;
+    const dowNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September',
+        'Oktober', 'November', 'Desember'
+    ];
+    const BASE_PRICE = <?= (int) $item['base_price'] ?>;
+    const PRICING_UNIT = <?= json_encode($item['pricing_unit']) ?>;
 
-        if (!startAt || !endAt) {
-            result.innerHTML = '<div class="avail-note avail-warn">Isi tanggal mulai dan selesai terlebih dahulu.</div>';
-            return;
-        }
-        if (new Date(startAt) >= new Date(endAt)) {
-            result.innerHTML = '<div class="avail-note avail-warn">Tanggal selesai harus setelah tanggal mulai.</div>';
-            return;
-        }
+    function formatRupiah(n) {
+        return 'Rp' + Math.round(n).toLocaleString('id-ID');
+    }
 
-        result.innerHTML = '<div class="avail-note">Memeriksa ketersediaan...</div>';
+    function countUnits(startKey, endKey) {
+        if (PRICING_UNIT === 'SESSION') return 1;
+        const start = new Date(startKey + 'T00:00:00');
+        const end = new Date(endKey + 'T00:00:00');
+        return Math.round((end - start) / 86400000) + 1; // inklusif tanggal mulai & selesai
+    }
 
-        try {
-            const res = await fetch('<?= base_url('/item/cek-tersedia/' . id_encode($item['id'])) ?>?start_at=' + encodeURIComponent(startAt) + '&end_at=' + encodeURIComponent(endAt));
-            const data = await res.json();
-            if (data.available) {
-                result.innerHTML = '<div class="avail-note avail-ok">Tersedia untuk jadwal yang dipilih.</div>';
-            } else {
-                result.innerHTML = '<div class="avail-note avail-warn">Maaf, tidak tersedia pada jadwal ini. Coba tanggal lain.</div>';
-            }
-        } catch (e) {
-            result.innerHTML = '<div class="avail-note avail-warn">Gagal memeriksa ketersediaan. Coba lagi.</div>';
-        }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const minYear = today.getFullYear(),
+        minMonth = today.getMonth() + 1;
+    let maxYear = minYear,
+        maxMonth = minMonth + 2;
+    if (maxMonth > 12) {
+        maxMonth -= 12;
+        maxYear += 1;
+    }
+
+    let viewYear = minYear,
+        viewMonth = minMonth;
+    let selStart = null,
+        selEnd = null;
+
+    const dowEl = document.getElementById('cal-dow');
+    dowNames.forEach(n => {
+        const s = document.createElement('span');
+        s.textContent = n;
+        dowEl.appendChild(s);
     });
+
+    function pad(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    function key(y, m, d) {
+        return `${y}-${pad(m)}-${pad(d)}`;
+    }
+
+    function renderCalendar() {
+        document.getElementById('cal-title').textContent = `${monthNames[viewMonth - 1]} ${viewYear}`;
+        document.getElementById('cal-prev').disabled = (viewYear === minYear && viewMonth === minMonth);
+        document.getElementById('cal-next').disabled = (viewYear === maxYear && viewMonth === maxMonth);
+
+        const grid = document.getElementById('cal-grid');
+        grid.innerHTML = '';
+        const firstDow = new Date(viewYear, viewMonth - 1, 1).getDay();
+        const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+        for (let i = 0; i < firstDow; i++) {
+            const e = document.createElement('div');
+            e.className = 'cal-day empty';
+            grid.appendChild(e);
+        }
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateKey = key(viewYear, viewMonth, d);
+            const cellDate = new Date(viewYear, viewMonth - 1, d);
+            cellDate.setHours(0, 0, 0, 0);
+            const info = CALENDAR_DATA[dateKey];
+            const el = document.createElement('div');
+            el.className = 'cal-day';
+
+            if (cellDate < today) {
+                el.classList.add('past');
+            } else if (info) {
+                if (info.total <= 0 || info.available <= 0) el.classList.add('full');
+                else if (info.available < info.total) el.classList.add('limited');
+                else el.classList.add('ok');
+            }
+
+            const num = document.createElement('div');
+            num.className = 'd-num';
+            num.textContent = d;
+            el.appendChild(num);
+
+            if (cellDate >= today && info) {
+                let label = '';
+                if (info.total <= 0 || info.available <= 0) label = 'Habis';
+                else if (info.available < info.total) label = 'Terbatas';
+                if (label) {
+                    const sub = document.createElement('div');
+                    sub.className = 'd-info';
+                    sub.textContent = info.total > 1 ? `${label} (${info.available}/${info.total})` : label;
+                    el.appendChild(sub);
+                }
+            }
+
+            if (selStart === dateKey || selEnd === dateKey) el.classList.add('selected');
+            else if (selStart && selEnd && dateKey > selStart && dateKey < selEnd) el.classList.add('in-range');
+
+            if (cellDate >= today && !el.classList.contains('full')) {
+                el.addEventListener('click', () => onPickDate(dateKey));
+            }
+
+            grid.appendChild(el);
+        }
+    }
+
+    function onPickDate(dateKey) {
+        if (!selStart || (selStart && selEnd)) {
+            selStart = dateKey;
+            selEnd = null;
+        } else if (dateKey < selStart) {
+            selStart = dateKey;
+            selEnd = null;
+        } else {
+            selEnd = dateKey;
+        }
+        updateSelectionUI();
+        renderCalendar();
+    }
+
+    function fmtDate(k) {
+        if (!k) return null;
+        const [y, m, d] = k.split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    function getRangeStock(startKey, endKey) {
+        const start = new Date(startKey + 'T00:00:00');
+        const end = new Date(endKey + 'T00:00:00');
+        let total = null,
+            minAvailable = null;
+        const cursor = new Date(start);
+        while (cursor <= end) {
+            const k = `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(cursor.getDate())}`;
+            const info = CALENDAR_DATA[k];
+            if (info) {
+                total = info.total;
+                minAvailable = (minAvailable === null) ? info.available : Math.min(minAvailable, info.available);
+            }
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        return {
+            total,
+            minAvailable
+        };
+    }
+
+    function setSelectionCard(cssClass, title, sub) {
+        const box = document.getElementById('cal-selection');
+        box.className = 'cal-selection' + (cssClass ? ' ' + cssClass : '');
+        box.innerHTML = `<p class="cs-title">${title}</p>` + (sub ? `<p class="cs-sub">${sub}</p>` : '');
+    }
+
+    function updateSelectionUI() {
+        const btnTambah = document.getElementById('btn-tambah');
+
+        if (selStart && selEnd) {
+            const {
+                total,
+                minAvailable
+            } = getRangeStock(selStart, selEnd);
+            document.getElementById('input_start_at').value = `${selStart} 00:00:00`;
+            const endDate = new Date(selEnd + 'T00:00:00');
+            endDate.setDate(endDate.getDate() + 1);
+            document.getElementById('input_end_at').value =
+                `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())} 00:00:00`;
+
+            const units = countUnits(selStart, selEnd);
+            const estTotal = BASE_PRICE * units;
+            const rangeLabel =
+                `${fmtDate(selStart)} — ${fmtDate(selEnd)} · ${units} ${PRICING_UNIT === 'SESSION' ? 'sesi' : PRICING_UNIT === 'NIGHT' ? 'malam' : 'hari'} · ${formatRupiah(BASE_PRICE)} x ${units} = ${formatRupiah(estTotal)}`;
+
+            if (total === null || minAvailable <= 0) {
+                setSelectionCard('cs-full', 'Habis pada rentang ini', rangeLabel);
+                btnTambah.disabled = true;
+            } else if (minAvailable < total) {
+                setSelectionCard('cs-limited', `Terbatas — tersisa ${minAvailable} unit`, rangeLabel);
+                btnTambah.disabled = false;
+            } else {
+                setSelectionCard('cs-ok', `Tersedia — stok ${total} unit`, rangeLabel);
+                btnTambah.disabled = false;
+            }
+        } else if (selStart) {
+            const single = CALENDAR_DATA[selStart];
+            if (single && single.available > 0 && single.available < single.total) {
+                setSelectionCard('cs-limited', `Terbatas — tersisa ${single.available} unit`,
+                    `${fmtDate(selStart)} — pilih tanggal selesai`);
+            } else if (single && single.available > 0) {
+                setSelectionCard('cs-ok', `Tersedia — stok ${single.total} unit`,
+                    `${fmtDate(selStart)} — pilih tanggal selesai`);
+            } else {
+                setSelectionCard('', `${fmtDate(selStart)}`, 'Pilih tanggal selesai');
+            }
+            btnTambah.disabled = true;
+        } else {
+            setSelectionCard('', 'Pilih tanggal mulai di kalender.', null);
+            btnTambah.disabled = true;
+        }
+    }
+
+    document.getElementById('cal-prev').addEventListener('click', () => {
+        if (viewYear === minYear && viewMonth === minMonth) return;
+        viewMonth--;
+        if (viewMonth < 1) {
+            viewMonth = 12;
+            viewYear--;
+        }
+        renderCalendar();
+    });
+    document.getElementById('cal-next').addEventListener('click', () => {
+        if (viewYear === maxYear && viewMonth === maxMonth) return;
+        viewMonth++;
+        if (viewMonth > 12) {
+            viewMonth = 1;
+            viewYear++;
+        }
+        renderCalendar();
+    });
+
+    renderCalendar();
+})();
 </script>
 
 <?= view('partials/footer') ?>
