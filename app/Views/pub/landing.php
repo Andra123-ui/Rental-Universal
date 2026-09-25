@@ -23,68 +23,48 @@ helper(['image', 'idhash']);
                 </div>
             </div>
 
+            <?php helper(['image', 'idhash']); ?>
+
             <div class="hero-art">
-                <div class="art-tile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M3 13l1.5-5A2 2 0 0 1 6.4 6.5h11.2A2 2 0 0 1 19.5 8l1.5 5" />
-                        <rect x="2.5" y="13" width="19" height="5.5" rx="1.2" />
-                        <circle cx="7" cy="18.5" r="1.4" />
-                        <circle cx="17" cy="18.5" r="1.4" />
-                    </svg>
-                    <span>Kendaraan</span>
-                </div>
-                <div class="art-tile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <rect x="3" y="7" width="18" height="13" rx="2" />
-                        <path d="M8 7l1.5-3h5L16 7" />
-                        <circle cx="12" cy="13.5" r="3.4" />
-                    </svg>
-                    <span>Kamera & Alat</span>
-                </div>
-                <div class="art-tile tall">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M4 21V10l8-6 8 6v11" />
-                        <path d="M9 21v-6h6v6" />
-                    </svg>
-                    <strong>Ruang &amp; Villa</strong>
-                </div>
-                <div class="art-tile">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <rect x="4" y="10" width="4" height="9" />
-                        <rect x="10" y="5" width="4" height="14" />
-                        <rect x="16" y="8" width="4" height="11" />
-                    </svg>
-                    <span>Jasa & Personel</span>
-                </div>
+
+                <?php
+    $heroItems = array_slice($catalogItems, 0, 4);
+    ?>
+
+                <?php foreach ($heroItems as $index => $item): ?>
+
+                <?php
+        $imgUrl = item_image_url(
+            $imageMap[$item['id']] ?? null,
+            'hero-' . $item['id']
+        );
+        ?>
+
+                <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>"
+                    class="hero-product-card hero-card-<?= $index + 1 ?>">
+
+                    <div class="hero-product-image">
+                        <img src="<?= esc($imgUrl) ?>" alt="<?= esc($item['name']) ?>">
+                    </div>
+
+                    <div class="hero-product-info">
+
+                        <span>
+                            <?= esc($item['item_type'] ?? 'Produk') ?>
+                        </span>
+
+                        <strong>
+                            <?= esc($item['name']) ?>
+                        </strong>
+
+                    </div>
+
+                </a>
+
+                <?php endforeach; ?>
+
             </div>
         </div>
-
-        <form class="search-card" method="get" action="<?= base_url('/catalog') ?>">
-            <div class="search-field">
-                <label for="s-kategori">Kategori</label>
-                <select id="s-kategori" name="kategori">
-                    <option value="">Semua kategori</option>
-                    <?php foreach ($categories as $cat): ?>
-                        <option value="<?= esc($cat['slug']) ?>">
-                            <?= esc($cat['name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="search-field">
-                <label for="s-mulai">Tanggal mulai</label>
-                <input type="date" id="s-mulai" name="start_at">
-            </div>
-            <div class="search-field">
-                <label for="s-selesai">Tanggal selesai</label>
-                <input type="date" id="s-selesai" name="end_at">
-            </div>
-            <button type="submit" class="btn btn-primary">Cek Ketersediaan</button>
-        </form>
     </div>
 </section>
 
@@ -159,31 +139,31 @@ helper(['image', 'idhash']);
         </div>
         <div class="card-grid">
             <?php if (empty($categories)): ?>
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7" rx="1" />
-                        <rect x="14" y="3" width="7" height="7" rx="1" />
-                        <rect x="3" y="14" width="7" height="7" rx="1" />
-                        <rect x="14" y="14" width="7" height="7" rx="1" />
-                    </svg>
-                    <h3>Kategori belum ditambahkan</h3>
-                    <p>Tambahkan kategori lewat menu Katalog di dashboard admin agar tampil di halaman ini.</p>
-                </div>
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                <h3>Kategori belum ditambahkan</h3>
+                <p>Tambahkan kategori lewat menu Katalog di dashboard admin agar tampil di halaman ini.</p>
+            </div>
             <?php else: ?>
-                <?php foreach ($categories as $cat): ?>
-                    <div class="cat-card">
-                        <div class="cat-card-img"
-                            style="background-image:url('<?= esc(category_image_url($cat['slug'])) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
-                        </div>
-                        <h3>
-                            <?= esc($cat['name']) ?>
-                        </h3>
-                        <p>
-                            <?= esc($cat['description'] ?? 'Lihat pilihan yang tersedia di kategori ini.') ?>
-                        </p>
-                        <a class="link" href="<?= base_url('/catalog?kategori=' . $cat['slug']) ?>">Lihat kategori &rarr;</a>
-                    </div>
-                <?php endforeach; ?>
+            <?php foreach ($categories as $cat): ?>
+            <div class="cat-card">
+                <div class="cat-card-img"
+                    style="background-image:url('<?= esc(category_image_url($cat['slug'])) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
+                </div>
+                <h3>
+                    <?= esc($cat['name']) ?>
+                </h3>
+                <p>
+                    <?= esc($cat['description'] ?? 'Lihat pilihan yang tersedia di kategori ini.') ?>
+                </p>
+                <a class="link" href="<?= base_url('/catalog?kategori=' . $cat['slug']) ?>">Lihat kategori &rarr;</a>
+            </div>
+            <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>
@@ -202,55 +182,55 @@ helper(['image', 'idhash']);
         </div>
         <div class="card-grid">
             <?php if (empty($catalogItems)): ?>
-                <div class="empty-state">
-                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 8l-9-5-9 5 9 5 9-5z" />
-                        <path d="M3 8v8l9 5 9-5V8" />
-                    </svg>
-                    <h3>Belum ada produk atau jasa</h3>
-                    <p>Tambahkan item pertama Anda lewat menu Katalog di dashboard admin.</p>
-                </div>
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+                    <path d="M3 8v8l9 5 9-5V8" />
+                </svg>
+                <h3>Belum ada produk atau jasa</h3>
+                <p>Tambahkan item pertama Anda lewat menu Katalog di dashboard admin.</p>
+            </div>
             <?php else: ?>
-                <?php foreach ($catalogItems as $i => $item):
+            <?php foreach ($catalogItems as $i => $item):
                     $imgUrl = item_image_url($imageMap[$item['id']] ?? null, 'item-' . $item['id']);
                     ?>
-                    <div class="item-card">
-                        <?php if ($i === 0): ?><span class="item-ribbon">Terbaru</span>
-                        <?php endif; ?>
-                        <div class="item-media"
-                            style="background-image:url('<?= esc($imgUrl) ?>');background-size:cover;background-position:center;">
-                        </div>
-                        <div class="item-body">
-                            <span class="item-type">
-                                <?= esc($item['item_type']) ?>
-                            </span>
-                            <h3>
-                                <?= esc($item['name']) ?>
-                            </h3>
-                            <p>
-                                <?= esc(mb_strimwidth($item['description'] ?? 'Detail lengkap tersedia di halaman produk.', 0, 90, '...')) ?>
-                            </p>
-                            <div class="item-meta-row">
-                                <span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                                        stroke-linejoin="round">
-                                        <circle cx="12" cy="12" r="9" />
-                                        <path d="M12 7v5l3.5 2" />
-                                    </svg> per
-                                    <?= esc($item['unit_label']) ?>
-                                </span>
-                            </div>
-                            <div class="item-footer">
-                                <div class="item-price">Rp
-                                    <?= number_format($item['base_price'], 0, ',', '.') ?> <small>/
-                                        <?= esc($item['unit_label']) ?>
-                                    </small>
-                                </div>
-                                <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
-                                    style="padding:8px 14px;font-size:0.85rem;">Detail</a>
-                            </div>
-                        </div>
+            <div class="item-card">
+                <?php if ($i === 0): ?><span class="item-ribbon">Terbaru</span>
+                <?php endif; ?>
+                <div class="item-media"
+                    style="background-image:url('<?= esc($imgUrl) ?>');background-size:cover;background-position:center;">
+                </div>
+                <div class="item-body">
+                    <span class="item-type">
+                        <?= esc($item['item_type']) ?>
+                    </span>
+                    <h3>
+                        <?= esc($item['name']) ?>
+                    </h3>
+                    <p>
+                        <?= esc(mb_strimwidth($item['description'] ?? 'Detail lengkap tersedia di halaman produk.', 0, 90, '...')) ?>
+                    </p>
+                    <div class="item-meta-row">
+                        <span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="M12 7v5l3.5 2" />
+                            </svg> per
+                            <?= esc($item['unit_label']) ?>
+                        </span>
                     </div>
-                <?php endforeach; ?>
+                    <div class="item-footer">
+                        <div class="item-price">Rp
+                            <?= number_format($item['base_price'], 0, ',', '.') ?> <small>/
+                                <?= esc($item['unit_label']) ?>
+                            </small>
+                        </div>
+                        <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
+                            style="padding:8px 14px;font-size:0.85rem;">Detail</a>
+                    </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>

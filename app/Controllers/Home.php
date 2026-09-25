@@ -20,12 +20,14 @@ class Home extends BaseController
             ->orderBy('sort_order', 'ASC')
             ->findAll(6);
 
+        // Ambil produk aktif untuk landing + hero
         $catalogItems = $catalogModel
             ->where('status', 'ACTIVE')
             ->orderBy('created_at', 'DESC')
             ->findAll(6);
 
         $itemIds = array_column($catalogItems, 'id');
+
         $imageMap = $mediaModel->getPrimaryImageMap($itemIds);
 
         return view('pub/landing', [

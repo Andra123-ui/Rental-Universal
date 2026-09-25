@@ -90,5 +90,6 @@ class Autoload extends AutoloadConfig
      */
     public $helpers = [
     'site',
+    'idhash',
 ];
 }
