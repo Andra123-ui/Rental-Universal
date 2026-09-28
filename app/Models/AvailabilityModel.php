@@ -116,27 +116,38 @@ class AvailabilityModel extends Model
      * Return: [resource_id => total_allocated]
      */
     protected function getAllocatedQtyMap(array $resourceIds, string $startAt, string $endAt): array
-    {
-        if (empty($resourceIds)) {
-            return [];
-        }
-
-        $rows = $this->db->table('booking_resource_allocations')
-            ->select('resource_id, SUM(allocated_qty) as total_qty')
-            ->whereIn('resource_id', $resourceIds)
-            ->whereIn('allocation_status', ['RESERVED', 'IN_USE'])
-            ->where('start_at <', $endAt)
-            ->where('end_at >', $startAt)
-            ->groupBy('resource_id')
-            ->get()
-            ->getResultArray();
-
-        $map = [];
-        foreach ($rows as $r) {
-            $map[$r['resource_id']] = (float) $r['total_qty'];
-        }
-        return $map;
+{
+    if (empty($resourceIds)) {
+        return [];
     }
+
+    $now = date('Y-m-d H:i:s');
+
+    $rows = $this->db->table('booking_resource_allocations bra')
+        ->select('bra.resource_id, SUM(bra.allocated_qty) as total_qty')
+        ->join('booking_items bi', 'bi.id = bra.booking_item_id')
+        ->join('bookings b', 'b.id = bi.booking_id')
+        ->whereIn('bra.resource_id', $resourceIds)
+        ->whereIn('bra.allocation_status', ['RESERVED', 'IN_USE'])
+        ->where('bra.start_at <', $endAt)
+        ->where('bra.end_at >', $startAt)
+        // Hold yang belum dibayar dan sudah lewat batas waktu tidak lagi mengunci stok
+        ->groupStart()
+            ->where('b.status !=', 'PENDING')
+            ->orWhere('b.payment_status !=', 'UNPAID')
+            ->orWhere('b.expires_at IS NULL')
+            ->orWhere('b.expires_at >', $now)
+        ->groupEnd()
+        ->groupBy('bra.resource_id')
+        ->get()
+        ->getResultArray();
+
+    $map = [];
+    foreach ($rows as $r) {
+        $map[$r['resource_id']] = (float) $r['total_qty'];
+    }
+    return $map;
+}
 
     /**
      * Blackout aktif yang overlap, per resource: FULL block (kapasitas jadi 0)
@@ -242,7 +253,7 @@ class AvailabilityModel extends Model
 
         foreach ($resources as $res) {
             $rid = $res['id'];
-            $capacity = $res['capacity'] !== null ? (float) $res['capacity'] : 1.0;
+            $capacity = (float) ($res['capacity'] ?? 0);
 
             if (in_array($rid, $maintenanceIds)) {
                 continue; // 0 tersedia, sedang maintenance
@@ -461,7 +472,7 @@ class AvailabilityModel extends Model
 
     $totalStock = 0.0;
     foreach ($resources as $res) {
-        $totalStock += $res['capacity'] !== null ? (float) $res['capacity'] : 1.0;
+    $totalStock += (float) ($res['capacity'] ?? 0);
     }
 
     $monthStartDate = sprintf('%04d-%02d-01', $year, $month);
@@ -487,6 +498,122 @@ class AvailabilityModel extends Model
     }
 
     return $calendar;
+}
+
+public function getBookingCount(int $catalogItemId): int
+{
+    $row = $this->db->table('booking_items bi')
+        ->select('COUNT(DISTINCT b.id) AS total')
+        ->join('bookings b', 'b.id = bi.booking_id')
+        ->where('bi.catalog_item_id', $catalogItemId)
+        ->whereNotIn('b.status', ['CANCELLED', 'EXPIRED'])
+        ->get()
+        ->getRowArray();
+
+    return (int) ($row['total'] ?? 0);
+}
+
+/**
+ * Kunci baris resource untuk item-item yang sedang di-checkout, supaya dua checkout
+ * bersamaan tidak sama-sama lolos. Harus jadi query PERTAMA di dalam transaction
+ * (sebelum ada SELECT biasa), dan butuh tabel InnoDB.
+ */
+public function lockItems(array $catalogItemIds): void
+{
+    $ids = array_values(array_unique(array_map('intval', $catalogItemIds)));
+    if (empty($ids)) {
+        return;
+    }
+    sort($ids);
+    $in = implode(',', $ids);
+    $this->db->query("SELECT id FROM resources WHERE catalog_item_id IN ({$in}) ORDER BY id FOR UPDATE");
+}
+
+/**
+ * Bagi qty ke resource yang masih punya sisa kapasitas.
+ * Return [['resource_id' => .., 'qty' => ..], ...] atau [] kalau stok tidak cukup.
+ */
+public function allocateResources(int $catalogItemId, ?int $branchId, string $startAt, string $endAt, int $qty): array
+{
+    $resources = $this->getCandidateResources($catalogItemId, $branchId);
+    if (empty($resources)) {
+        return [];
+    }
+
+    $resourceIds    = array_column($resources, 'id');
+    $allocatedMap   = $this->getAllocatedQtyMap($resourceIds, $startAt, $endAt);
+    $blackoutMap    = $this->getBlackoutMap($catalogItemId, $resourceIds, $branchId, $startAt, $endAt);
+    $maintenanceIds = $this->getMaintenanceBlockedIds($resourceIds, $startAt, $endAt);
+
+    $remaining = (float) $qty;
+    $plan = [];
+
+    foreach ($resources as $res) {
+        if ($remaining <= 0) {
+            break;
+        }
+        $rid = $res['id'];
+        if (in_array($rid, $maintenanceIds) || !empty($blackoutMap[$rid]['full'])) {
+            continue;
+        }
+
+        $free = (float) ($res['capacity'] ?? 0)
+            - ($blackoutMap[$rid]['reduction'] ?? 0.0)
+            - ($allocatedMap[$rid] ?? 0.0);
+        if ($free <= 0) {
+            continue;
+        }
+
+        $take = min($free, $remaining);
+        $plan[] = ['resource_id' => $rid, 'qty' => $take];
+        $remaining -= $take;
+    }
+
+    return $remaining > 0 ? [] : $plan;
+}
+
+/**
+ * Booking PENDING + UNPAID yang lewat expires_at -> EXPIRED, item & allocation dibatalkan.
+ * Return jumlah booking yang di-expire.
+ */
+public function expireStaleBookings(): int
+{
+    $now = date('Y-m-d H:i:s');
+
+    $stale = $this->db->table('bookings')
+        ->select('id')
+        ->where('status', 'PENDING')
+        ->where('payment_status', 'UNPAID')
+        ->where('expires_at IS NOT NULL')
+        ->where('expires_at <=', $now)
+        ->get()
+        ->getResultArray();
+
+    if (empty($stale)) {
+        return 0;
+    }
+    $bookingIds = array_column($stale, 'id');
+
+    $this->db->transStart();
+
+    $itemIds = array_column(
+        $this->db->table('booking_items')->select('id')->whereIn('booking_id', $bookingIds)->get()->getResultArray(),
+        'id'
+    );
+    if (!empty($itemIds)) {
+        $this->db->table('booking_resource_allocations')
+            ->whereIn('booking_item_id', $itemIds)
+            ->where('allocation_status', 'RESERVED')
+            ->update(['allocation_status' => 'CANCELLED']);
+    }
+    $this->db->table('booking_items')->whereIn('booking_id', $bookingIds)
+        ->update(['status' => 'CANCELLED', 'updated_at' => $now]);
+    $this->db->table('bookings')->whereIn('id', $bookingIds)
+        ->update(['status' => 'EXPIRED', 'updated_at' => $now]);
+
+    $this->db->transComplete();
+
+    return count($bookingIds);
 }
 
 

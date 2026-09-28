@@ -14,6 +14,8 @@ class Checkout extends BaseController
 {
     protected const CART_KEY = 'rental_cart';
     protected const CHECKOUT_KEY = 'checkout_data';
+    protected const PAYMENT_WINDOW_MINUTES = 3;  // batas bayar; stok dikunci selama ini
+    protected const COOLDOWN_SECONDS = 120;      // freeze booking setelah gagal bayar
 
     /**
      * PUB-07: Form Data Penyewa
@@ -50,6 +52,11 @@ class Checkout extends BaseController
                 'Nama, nomor HP, dan persetujuan syarat & ketentuan wajib diisi/dicentang.',
             ]);
         }
+
+        $wait = $this->cooldownRemaining((string) $this->request->getPost('phone'));
+    if ($wait > 0) {
+    return redirect()->back()->withInput()->with('error', "Pembayaran sebelumnya belum selesai. Anda bisa booking lagi dalam {$wait} detik.");
+    }
 
         $authMode = $this->request->getPost('auth_mode'); // 'guest' atau 'account'
 
@@ -162,199 +169,257 @@ class Checkout extends BaseController
      * -> PUB-10 Booking Berhasil
      */
     public function proses()
-    {
-        $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
-        $cart = session()->get(self::CART_KEY) ?? [];
+{
+    $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
+    $cart = session()->get(self::CART_KEY) ?? [];
 
-        if (empty($checkoutData['customer']) || empty($checkoutData['fulfillment']) || empty($cart)) {
-            return redirect()->to('/cart')->with('error', 'Data booking tidak lengkap. Silakan ulangi.');
+    if (empty($checkoutData['customer']) || empty($checkoutData['fulfillment']) || empty($cart)) {
+        return redirect()->to('/cart')->with('error', 'Data booking tidak lengkap. Silakan ulangi.');
+    }
+
+    if (!$this->request->is('post')) {
+        return redirect()->to('/checkout/review');
+    }
+
+    $wait = $this->cooldownRemaining((string) $checkoutData['customer']['phone']);
+    if ($wait > 0) {
+        return redirect()->to('/checkout/review')
+            ->with('error', "Pembayaran sebelumnya belum selesai. Anda bisa booking lagi dalam {$wait} detik.");
+    }
+
+    $db = \Config\Database::connect();
+    $availabilityModel = new \App\Models\AvailabilityModel();
+    $db->transStart();
+
+    try {
+        // Harus query pertama di transaction: kunci resource semua item di keranjang
+        $availabilityModel->lockItems(array_column($cart, 'catalog_item_id'));
+
+        $customerModel = new CustomerModel();
+        $catalogModel = new CatalogItemModel();
+        $bookingModel = new BookingModel();
+        $bookingItemModel = new BookingItemModel();
+        $allocModel = new BookingResourceAllocationModel();
+
+        $custData = $checkoutData['customer'];
+
+        $existingCustomer = $customerModel->where('phone', $custData['phone'])->first();
+        if ($existingCustomer) {
+            $customerId = $existingCustomer['id'];
+        } else {
+            $customerId = $customerModel->insert([
+                'name' => $custData['name'],
+                'phone' => $custData['phone'],
+                'email' => $custData['email'] ?? null,
+                'notes' => $custData['notes'] ?? null,
+            ]);
         }
 
-        if (!$this->request->is('post')) {
-            return redirect()->to('/checkout/review');
+        $earliestStart = null;
+        $latestEnd = null;
+        $subtotal = 0;
+        $depositTotal = 0;
+        $cartLines = [];
+
+        foreach ($cart as $line) {
+            $product = $catalogModel->find($line['catalog_item_id']);
+            if (!$product) {
+                continue;
+            }
+
+            $availCheck = $availabilityModel->checkAvailability(
+                (int) $product['id'],
+                $line['branch_id'] ?? null,
+                $line['start_at'],
+                $line['end_at'],
+                (int) $line['qty']
+            );
+
+            if ($availCheck['status'] !== 'available') {
+                throw new DatabaseException("Item '{$product['name']}': " . ($availCheck['message'] ?? 'sudah tidak tersedia pada jadwal yang dipilih.'));
+            }
+
+            $price = $availabilityModel->estimatePrice(
+                $product,
+                $line['branch_id'] ?? null,
+                $line['start_at'],
+                $line['end_at'],
+                (int) $line['qty']
+            );
+
+            $lineTotal = $price['subtotal'];
+            $lineDeposit = $product['deposit_required'] ? $product['deposit_amount'] * $line['qty'] : 0;
+            $subtotal += $lineTotal;
+            $depositTotal += $lineDeposit;
+
+            if ($earliestStart === null || $line['start_at'] < $earliestStart) {
+                $earliestStart = $line['start_at'];
+            }
+            if ($latestEnd === null || $line['end_at'] > $latestEnd) {
+                $latestEnd = $line['end_at'];
+            }
+
+            $cartLines[] = ['product' => $product, 'line' => $line, 'line_total' => $lineTotal, 'price' => $price];
         }
 
-        $db = \Config\Database::connect();
-        $db->transStart();
+        if (empty($cartLines)) {
+            throw new DatabaseException('Tidak ada item valid pada keranjang.');
+        }
 
-        try {
-            $customerModel = new CustomerModel();
-            $catalogModel = new CatalogItemModel();
-            $resourceModel = new ResourceModel();
-            $bookingModel = new BookingModel();
-            $bookingItemModel = new BookingItemModel();
-            $allocModel = new BookingResourceAllocationModel();
-            $availabilityModel = new \App\Models\AvailabilityModel();
+        $grandTotal = $subtotal + $depositTotal;
+        $invoiceNo = $this->generateInvoiceNo();
 
-            $custData = $checkoutData['customer'];
+        $bookingId = $bookingModel->insert([
+            'invoice_no' => $invoiceNo,
+            'business_id' => 1,
+            'customer_id' => $customerId,
+            'booking_source' => 'WEB',
+            'start_at' => $earliestStart,
+            'end_at' => $latestEnd,
+            'customer_name_snapshot' => $custData['name'],
+            'customer_phone_snapshot' => $custData['phone'],
+            'customer_email_snapshot' => $custData['email'] ?? null,
+            'fulfillment_method' => $checkoutData['fulfillment']['fulfillment_method'],
+            'pickup_address' => $checkoutData['fulfillment']['pickup_address'] ?? null,
+            'return_address' => $checkoutData['fulfillment']['return_address'] ?? null,
+            'status' => 'PENDING',
+            'payment_status' => 'UNPAID',
+            'subtotal' => $subtotal,
+            'deposit_total' => $depositTotal,
+            'grand_total' => $grandTotal,
+            'paid_total' => 0,
+            'balance_due' => $grandTotal,
+            'customer_notes' => $custData['notes'] ?? null,
+            'internal_notes' => 'Menyetujui Terms v' . ($custData['terms_agreed_version'] ?? '-')
+                . ' pada ' . ($custData['terms_agreed_at'] ?? '-')
+                . ' dari IP ' . ($custData['terms_agreed_ip'] ?? '-'),
+            'expires_at' => date('Y-m-d H:i:s', strtotime('+' . self::PAYMENT_WINDOW_MINUTES . ' minutes')),
+        ]);
 
-            // Cari customer existing by phone, atau buat baru
-            $existingCustomer = $customerModel->where('phone', $custData['phone'])->first();
-            if ($existingCustomer) {
-                $customerId = $existingCustomer['id'];
-            } else {
-                $customerId = $customerModel->insert([
-                    'name' => $custData['name'],
-                    'phone' => $custData['phone'],
-                    'email' => $custData['email'] ?? null,
-                    'notes' => $custData['notes'] ?? null,
-                ]);
-            }
+        foreach ($cartLines as $cl) {
+            $product = $cl['product'];
+            $line = $cl['line'];
 
-            // Hitung ulang total & tentukan rentang waktu keseluruhan booking
-            $earliestStart = null;
-            $latestEnd = null;
-            $subtotal = 0;
-            $depositTotal = 0;
-            $cartLines = [];
-
-            foreach ($cart as $line) {
-                $product = $catalogModel->find($line['catalog_item_id']);
-                if (!$product) {
-                    continue;
-                }
-
-                // Re-check availability sebelum commit (server-side, wajib) —
-                // pakai AvailabilityModel supaya konsisten dengan cek yang sama
-                // di /item/cek-tersedia dan Cart::tambah()/update(), sekaligus
-                // memperhitungkan kapasitas resource, blackout, dan maintenance
-                // (bukan cuma cek overlap jadwal sederhana).
-                $availCheck = $availabilityModel->checkAvailability(
-                    (int) $product['id'],
-                    $line['branch_id'] ?? null,
-                    $line['start_at'],
-                    $line['end_at'],
-                    (int) $line['qty']
-                );
-
-                if ($availCheck['status'] !== 'available') {
-                    throw new DatabaseException("Item '{$product['name']}': " . ($availCheck['message'] ?? 'sudah tidak tersedia pada jadwal yang dipilih.'));
-                }
-
-                $lineTotal = $product['base_price'] * $line['qty'];
-                $lineDeposit = $product['deposit_required'] ? $product['deposit_amount'] * $line['qty'] : 0;
-                $subtotal += $lineTotal;
-                $depositTotal += $lineDeposit;
-
-                if ($earliestStart === null || $line['start_at'] < $earliestStart) {
-                    $earliestStart = $line['start_at'];
-                }
-                if ($latestEnd === null || $line['end_at'] > $latestEnd) {
-                    $latestEnd = $line['end_at'];
-                }
-
-                $cartLines[] = ['product' => $product, 'line' => $line, 'line_total' => $lineTotal];
-            }
-
-            if (empty($cartLines)) {
-                throw new DatabaseException('Tidak ada item valid pada keranjang.');
-            }
-
-            $grandTotal = $subtotal + $depositTotal;
-            $invoiceNo = $this->generateInvoiceNo();
-
-            $bookingId = $bookingModel->insert([
-                'invoice_no' => $invoiceNo,
-                'business_id' => 1, // sesuaikan jika multi-business
-                'customer_id' => $customerId,
-                'booking_source' => 'WEB',
-                'start_at' => $earliestStart,
-                'end_at' => $latestEnd,
-                'customer_name_snapshot' => $custData['name'],
-                'customer_phone_snapshot' => $custData['phone'],
-                'customer_email_snapshot' => $custData['email'] ?? null,
-                'fulfillment_method' => $checkoutData['fulfillment']['fulfillment_method'],
-                'pickup_address' => $checkoutData['fulfillment']['pickup_address'] ?? null,
-                'return_address' => $checkoutData['fulfillment']['return_address'] ?? null,
-                'status' => 'PENDING',
-                'payment_status' => 'UNPAID',
-                'subtotal' => $subtotal,
-                'deposit_total' => $depositTotal,
-                'grand_total' => $grandTotal,
-                'paid_total' => 0,
-                'balance_due' => $grandTotal,
-                'customer_notes' => $custData['notes'] ?? null,
-                'internal_notes' => 'Menyetujui Terms v' . ($custData['terms_agreed_version'] ?? '-')
-                    . ' pada ' . ($custData['terms_agreed_at'] ?? '-')
-                    . ' dari IP ' . ($custData['terms_agreed_ip'] ?? '-'),
-                'expires_at' => date('Y-m-d H:i:s', strtotime('+24 hours')),
+            $bookingItemId = $bookingItemModel->insert([
+                'booking_id' => $bookingId,
+                'catalog_item_id' => $product['id'],
+                'item_name_snapshot' => $product['name'],
+                'item_type_snapshot' => $product['item_type'],
+                'start_at' => $line['start_at'],
+                'end_at' => $line['end_at'],
+                'quantity' => $line['qty'],
+                'duration_value' => $cl['price']['units'],
+                'duration_unit' => $product['pricing_unit'],
+                'unit_price' => $product['base_price'],
+                'subtotal' => $cl['line_total'],
+                'status' => 'RESERVED',
             ]);
 
-            foreach ($cartLines as $cl) {
-                $product = $cl['product'];
-                $line = $cl['line'];
+            // Kunci stok sekarang (hold). Kalau gagal, seluruh booking dibatalkan (rollback),
+            // tidak lagi lolos diam-diam tanpa allocation.
+            $plan = $availabilityModel->allocateResources(
+                (int) $product['id'],
+                $line['branch_id'] ?? null,
+                $line['start_at'],
+                $line['end_at'],
+                (int) $line['qty']
+            );
 
-                $bookingItemId = $bookingItemModel->insert([
-                    'booking_id' => $bookingId,
-                    'catalog_item_id' => $product['id'],
-                    'item_name_snapshot' => $product['name'],
-                    'item_type_snapshot' => $product['item_type'],
+            if (empty($plan)) {
+                throw new DatabaseException("Stok '{$product['name']}' baru saja habis untuk jadwal yang dipilih. Silakan pilih tanggal lain.");
+            }
+
+            foreach ($plan as $p) {
+                $allocModel->insert([
+                    'booking_item_id' => $bookingItemId,
+                    'resource_id' => $p['resource_id'],
+                    'allocated_qty' => $p['qty'],
                     'start_at' => $line['start_at'],
                     'end_at' => $line['end_at'],
-                    'quantity' => $line['qty'],
-                    'duration_value' => 1,
-                    'duration_unit' => $product['pricing_unit'],
-                    'unit_price' => $product['base_price'],
-                    'subtotal' => $cl['line_total'],
-                    'status' => 'RESERVED',
+                    'allocation_status' => 'RESERVED',
                 ]);
-
-                // Auto-allocate resource yang benar-benar kosong di rentang waktu ini
-                // (bukan cuma cek status AVAILABLE statis, tapi cek jadwal allocation-nya juga)
-                $resource = $resourceModel->findFreeResourceForPeriod(
-                    (int) $product['id'],
-                    $line['start_at'],
-                    $line['end_at']
-                );
-
-                if ($resource) {
-                    $allocModel->insert([
-                        'booking_item_id' => $bookingItemId,
-                        'resource_id' => $resource['id'],
-                        'allocated_qty' => $line['qty'],
-                        'start_at' => $line['start_at'],
-                        'end_at' => $line['end_at'],
-                        'allocation_status' => 'RESERVED',
-                    ]);
-                }
             }
-
-            $db->transComplete();
-
-            if ($db->transStatus() === false) {
-                throw new DatabaseException('Gagal menyimpan booking. Silakan coba lagi.');
-            }
-
-            // Bersihkan session cart & checkout data
-            session()->remove(self::CART_KEY);
-            session()->remove(self::CHECKOUT_KEY);
-
-            return redirect()->to('/checkout/berhasil/' . $invoiceNo);
-
-        } catch (\Throwable $e) {
-            $db->transRollback();
-            return redirect()->to('/checkout/review')->with('error', $e->getMessage());
         }
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            throw new DatabaseException('Gagal menyimpan booking. Silakan coba lagi.');
+        }
+
+        session()->remove(self::CART_KEY);
+        session()->remove(self::CHECKOUT_KEY);
+        
+        session()->set('last_invoice', $invoiceNo);
+        return redirect()->to('/checkout/berhasil/' . $invoiceNo);
+
+    } catch (\Throwable $e) {
+        $db->transRollback();
+        return redirect()->to('/checkout/review')->with('error', $e->getMessage());
     }
+}
 
     /**
      * PUB-10: Booking Berhasil
      */
     public function berhasil(string $invoiceNo)
-    {
-        $bookingModel = new BookingModel();
-        $booking = $bookingModel->where('invoice_no', $invoiceNo)->first();
+{
+    (new \App\Models\AvailabilityModel())->expireStaleBookings();
 
-        if (!$booking) {
-            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
-        }
+    $bookingModel = new BookingModel();
+    $booking = $bookingModel->where('invoice_no', $invoiceNo)->first();
 
-        return view('pub/checkout_berhasil', ['booking' => $booking]);
+    if (!$booking) {
+        throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
     }
+
+    $secondsLeft = null;
+    $freezeLeft = 0;
+    if ($booking['status'] === 'PENDING' && $booking['payment_status'] === 'UNPAID' && !empty($booking['expires_at'])) {
+        $secondsLeft = max(0, strtotime($booking['expires_at']) - time());
+    } elseif ($booking['status'] === 'EXPIRED' && !empty($booking['expires_at'])) {
+        $freezeLeft = max(0, strtotime($booking['expires_at']) + self::COOLDOWN_SECONDS - time());
+    }
+
+    return view('pub/checkout_berhasil', [
+        'booking' => $booking,
+        'secondsLeft' => $secondsLeft,
+        'freezeLeft' => $freezeLeft,
+    ]);
+}
 
     private function generateInvoiceNo(): string
     {
         // Format: INV-YYYYMMDD-XXXXXX (acak, sulit ditebak sesuai PUB-10 rule)
         return 'INV-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
     }
+
+    /**
+ * Sisa detik freeze booking untuk nomor HP ini (0 = boleh booking).
+ */
+private function cooldownRemaining(string $phone): int
+{
+    (new \App\Models\AvailabilityModel())->expireStaleBookings();
+
+    $customer = (new CustomerModel())->where('phone', $phone)->first();
+    if (!$customer) {
+        return 0;
+    }
+
+    $last = \Config\Database::connect()->table('bookings')
+        ->select('expires_at')
+        ->where('customer_id', $customer['id'])
+        ->where('status', 'EXPIRED')
+        ->where('expires_at IS NOT NULL')
+        ->orderBy('expires_at', 'DESC')
+        ->limit(1)
+        ->get()
+        ->getRowArray();
+
+    if (!$last) {
+        return 0;
+    }
+
+    return max(0, strtotime($last['expires_at']) + self::COOLDOWN_SECONDS - time());
+}
 }

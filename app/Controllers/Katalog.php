@@ -112,6 +112,8 @@ class Katalog extends BaseController
       $cursor->modify('+1 month');
     }
 
+    $bookingCount = $availabilityModel->getBookingCount($id);
+
     return view('pub/katalog_detail', [
       'item' => $item,
       'category' => $category,
@@ -119,6 +121,7 @@ class Katalog extends BaseController
       'gallery' => $gallery,
       'relatedImages' => $relatedImages,
       'calendarData' => $calendarData,
+      'bookingCount' => $bookingCount,
     ]);
   }
 

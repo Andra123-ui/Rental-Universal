@@ -61,6 +61,12 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                         </small>
                     </div>
 
+                    <div style="margin-top:8px;font-size:.85rem;color:var(--muted);">
+                        <?= $bookingCount > 0
+        ? 'Sudah dipesan ' . number_format($bookingCount, 0, ',', '.') . ' kali'
+        : 'Belum pernah dipesan' ?>
+                    </div>
+
                     <p style="margin-top:18px;color:var(--muted);line-height:1.7;">
                         <?= nl2br(esc($item['description'] ?? 'Belum ada deskripsi lengkap untuk item ini.')) ?>
                     </p>
