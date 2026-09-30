@@ -640,7 +640,7 @@ body:has(.profile-onboarding) {
 
     display: flex;
 
-    justify-content: flex-end;
+    justify-content: space-between;
 
     margin-top: 4px;
 
@@ -687,10 +687,20 @@ body:has(.profile-onboarding) {
     cursor: not-allowed;
 }
 
+.btn-secondary {
+    min-width: 220px;
 
-/* =========================================================
-   MODAL OTP
-========================================================= */
+    padding: 11px 20px;
+
+    border-radius: 10px;
+
+    color: #1B3A8C;
+
+    font-size: .88rem;
+    font-weight: 600;
+
+    cursor: pointer;
+}
 
 /* =========================================================
    MODAL GANTI NOMOR WHATSAPP
@@ -1547,6 +1557,10 @@ body:has(.profile-onboarding) {
                     <!-- ACTION -->
 
                     <div class="form-actions">
+
+                        <a href="<?= base_url('/') ?>" class="btn-secondary">
+                            Kembali
+                        </a>
 
                         <button type="submit" class="btn-primary" id="save-profile-btn">
                             Simpan Perubahan

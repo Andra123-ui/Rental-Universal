@@ -82,8 +82,8 @@
 
             <div style="margin-top:20px;">
 
-                <a href="<?= base_url('/catalog') ?>" class="btn btn-outline">
-                    Kembali ke Katalog
+                <a href="<?= base_url('/account/booking') ?>" class="btn btn-outline">
+                    Lihat History Booking
                 </a>
 
             </div>

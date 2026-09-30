@@ -56,7 +56,7 @@ class Checkout extends BaseController
 
         $wait = $this->cooldownRemaining((string) $this->request->getPost('phone'));
     if ($wait > 0) {
-    return redirect()->back()->withInput()->with('error', "Pembayaran sebelumnya belum selesai. Anda bisa booking lagi dalam {$wait} detik.");
+    return redirect()->back()->withInput()->with('error', "Pembayaran sebelumnya gagal. Anda bisa booking lagi dalam {$wait} detik.");
     }
 
         $authMode = $this->request->getPost('auth_mode'); // 'guest' atau 'account'
@@ -201,7 +201,7 @@ class Checkout extends BaseController
     $wait = $this->cooldownRemaining((string) $checkoutData['customer']['phone']);
     if ($wait > 0) {
         return redirect()->to('/checkout/review')
-            ->with('error', "Pembayaran sebelumnya belum selesai. Anda bisa booking lagi dalam {$wait} detik.");
+            ->with('error', "Pembayaran sebelumnya gagal. Anda bisa booking lagi dalam {$wait} detik.");
     }
 
     $db = \Config\Database::connect();
