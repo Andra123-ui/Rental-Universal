@@ -1,4 +1,5 @@
 <?php
+helper('business');
 /**
  * @var array $items
  * @var float $subtotal
@@ -64,6 +65,21 @@
                                     <?= number_format($line['product']['base_price'], 0, ',', '.') ?> /
                                     <?= esc($unit) ?>
                                 </span>
+
+                                <?php
+                                $bizName = business_name($line['product']['business_id'] ?? null);
+                                $brName  = branch_name(isset($line['branch_id']) ? (int) $line['branch_id'] : null);
+                                $desc    = trim((string) ($line['product']['description'] ?? ''));
+                                ?>
+                                <div class="cart-meta">
+                                    <?php if ($bizName !== ''): ?>
+                                    <div><span>Bisnis</span> <?= esc($bizName) ?></div>
+                                    <?php endif; ?>
+                                    <div><span>Cabang</span> <?= $brName !== '' ? esc($brName) : 'Semua cabang' ?></div>
+                                </div>
+                                <?php if ($desc !== ''): ?>
+                                <p class="cart-desc"><?= esc(mb_strimwidth($desc, 0, 120, '…')) ?></p>
+                                <?php endif; ?>
                             </td>
                             <td style="font-size:0.85rem;color:var(--muted);">
                                 <?= esc(date('d M Y H:i', strtotime($line['start_at']))) ?><br>
@@ -124,6 +140,27 @@
 </section>
 
 <style>
+.cart-meta {
+    margin-top: 6px;
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.cart-meta span {
+    display: inline-block;
+    min-width: 46px;
+    font-weight: 600;
+}
+
+.cart-desc {
+    margin: 6px 0 0;
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.5;
+    max-width: 320px;
+}
+
 .qty-stepper {
     display: inline-flex;
     align-items: center;

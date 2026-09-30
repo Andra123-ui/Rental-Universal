@@ -26,6 +26,11 @@ class AuthController extends BaseController
     protected const ERR_EXPIRED = 'Kode OTP sudah tidak berlaku. Silakan minta kode baru.';
     protected const ERR_BLOCKED = 'Terlalu banyak percobaan salah. Silakan minta kode baru.';
     protected const ERR_NO_SESSION = 'Sesi login tidak ditemukan. Silakan mulai ulang dari halaman login.';
+    protected const DOC_TYPES = [
+        'KTP' => 'KTP',
+        'SIM' => 'SIM',
+        'PASPOR' => 'Paspor',
+    ];
 
     public function __construct()
     {
@@ -315,10 +320,13 @@ class AuthController extends BaseController
             $userAgent
         );
 
-        $returnUrl = session()->get('customer_login_return_url') ?? '/';
-        session()->remove('customer_login_return_url');
+        // Belum melengkapi profil -> onboarding dulu (return_url tetap tersimpan di session)
+        $freshAccount = $this->accountModel->find($accountId);
+        if (empty($freshAccount['onboarded_at'])) {
+            return redirect()->to(site_url('account/onboarding'));
+        }
 
-        return redirect()->to(site_url(ltrim($returnUrl, '/')));
+        return $this->redirectAfterLogin();
     }
 
     /**
@@ -448,6 +456,152 @@ class AuthController extends BaseController
         }
 
         return redirect()->to(site_url('/'));
+    }
+
+        /**
+     * GET /account/onboarding
+     * Lengkapi data profil setelah login OTP pertama — CAUTH-03.
+     */
+    public function onboardingForm()
+    {
+        $subject = $this->onboardingSubject();
+        if ($subject === null) {
+            return redirect()->to(site_url('account/login'))
+                ->with('errors', ['session' => self::ERR_NO_SESSION]);
+        }
+        [$customer, $account] = $subject;
+
+        // Sudah pernah melengkapi profil -> tidak perlu lewat sini lagi
+        if (!empty($account['onboarded_at'])) {
+            return $this->redirectAfterLogin();
+        }
+
+        // Akun baru dibuat dengan name = nomor HP (placeholder), jangan tampilkan di form
+        $prefillName = ($customer['name'] === $customer['phone']) ? '' : $customer['name'];
+
+        return view('customer/onboarding', [
+            'customer' => $customer,
+            'prefillName' => $prefillName,
+            'docTypes' => self::DOC_TYPES,
+        ]);
+    }
+
+    /**
+     * POST /account/onboarding
+     */
+    public function onboardingSubmit()
+    {
+        $subject = $this->onboardingSubject();
+        if ($subject === null) {
+            return redirect()->to(site_url('account/login'))
+                ->with('errors', ['session' => self::ERR_NO_SESSION]);
+        }
+        [$customer, $account] = $subject;
+
+        if (!empty($account['onboarded_at'])) {
+            return $this->redirectAfterLogin();
+        }
+
+        $customerId = (int) $customer['id'];
+        $docType = strtoupper(trim((string) $this->request->getPost('document_type')));
+
+        $rules = [
+            'name' => 'required|min_length[3]|max_length[150]',
+            'email' => 'permit_empty|valid_email|max_length[150]',
+            'address' => 'permit_empty|max_length[500]',
+            'document_type' => 'permit_empty|in_list[' . implode(',', array_keys(self::DOC_TYPES)) . ']',
+            'emergency_contact_name' => 'permit_empty|max_length[150]',
+            'emergency_contact_phone' => 'permit_empty|min_length[9]|max_length[30]|regex_match[/^[0-9+\-\s]+$/]',
+            'notes' => 'permit_empty|max_length[500]',
+        ];
+
+        // Identitas kondisional: kalau jenis dipilih, nomor + file wajib
+        if ($docType !== '') {
+            $rules['document_number'] = 'required|min_length[5]|max_length[80]';
+            $rules['id_file'] = 'uploaded[id_file]|max_size[id_file,4096]|mime_in[id_file,image/jpg,image/jpeg,image/png,application/pdf]';
+        }
+
+        if (!$this->validate($rules)) {
+            return redirect()->back()->withInput()
+                ->with('errors', $this->validator->getErrors());
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        // 1) Profil customer
+        $profile = [
+            'name' => trim((string) $this->request->getPost('name')),
+            'email' => $this->postOrNull('email'),
+            'address' => $this->postOrNull('address'),
+            'emergency_contact_name' => $this->postOrNull('emergency_contact_name'),
+            'emergency_contact_phone' => $this->postOrNull('emergency_contact_phone'),
+            'notes' => $this->postOrNull('notes'),
+        ];
+        if ($docType !== '') {
+            $profile['id_type'] = $docType;
+            $profile['id_number'] = trim((string) $this->request->getPost('document_number'));
+        }
+        $db->table('customers')->where('id', $customerId)->update($profile);
+
+        // 2) File identitas (disimpan di writable/uploads, tidak bisa dibuka lewat URL)
+        if ($docType !== '') {
+            $file = $this->request->getFile('id_file');
+            $db->table('customer_documents')->insert([
+                'customer_id' => $customerId,
+                'document_type' => $docType,
+                'document_number' => $profile['id_number'],
+                'file_path' => $file->store('customer_documents/' . $customerId),
+                'is_verified' => 0,
+            ]);
+        }
+
+        // 3) Tandai onboarding selesai
+        $db->table('customer_accounts')->where('id', (int) $account['id'])
+            ->update(['onboarded_at' => date('Y-m-d H:i:s')]);
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return redirect()->back()->withInput()
+                ->with('errors', ['form' => 'Gagal menyimpan data. Silakan coba lagi.']);
+        }
+
+        return $this->redirectAfterLogin()->with('success', 'Data profil Anda berhasil disimpan.');
+    }
+
+    /**
+     * Customer + account dari session login, atau null kalau tidak ada.
+     */
+    protected function onboardingSubject(): ?array
+    {
+        $customerId = session()->get('customer_id');
+        $accountId = session()->get('customer_account_id');
+        if (!$customerId || !$accountId) {
+            return null;
+        }
+
+        $customer = $this->customerModel->find($customerId);
+        $account = $this->accountModel->find($accountId);
+
+        return ($customer && $account) ? [$customer, $account] : null;
+    }
+
+    /**
+     * Kembali ke tujuan sebelum login (mis. checkout), atau beranda.
+     */
+    protected function redirectAfterLogin()
+    {
+        $returnUrl = session()->get('customer_login_return_url') ?? '/';
+        session()->remove('customer_login_return_url');
+
+        return redirect()->to(site_url(ltrim($returnUrl, '/')));
+    }
+
+    protected function postOrNull(string $key): ?string
+    {
+        $v = trim((string) $this->request->getPost($key));
+        return $v === '' ? null : $v;
     }
 
     /**

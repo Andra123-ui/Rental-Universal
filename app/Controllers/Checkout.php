@@ -16,6 +16,7 @@ class Checkout extends BaseController
     protected const CHECKOUT_KEY = 'checkout_data';
     protected const PAYMENT_WINDOW_MINUTES = 3;  // batas bayar; stok dikunci selama ini
     protected const COOLDOWN_SECONDS = 120;      // freeze booking setelah gagal bayar
+    protected $helpers = ['business'];
 
     /**
      * PUB-07: Form Data Penyewa
@@ -62,7 +63,7 @@ class Checkout extends BaseController
 
         $data = [
             'name' => $this->request->getPost('name'),
-            'phone' => $this->request->getPost('phone'),
+            'phone' => $this->normalizePhone((string) $this->request->getPost('phone')),
             'email' => $this->request->getPost('email'),
             'notes' => $this->request->getPost('notes'),
             'is_guest' => $authMode !== 'account',
@@ -120,15 +121,18 @@ class Checkout extends BaseController
     /**
      * PUB-09: Review Booking & Harga
      */
-    public function review()
+        public function review()
     {
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
         if (empty($checkoutData['fulfillment'])) {
             return redirect()->to('/checkout/fulfillment')->with('error', 'Lengkapi metode pemenuhan terlebih dahulu.');
         }
 
+        helper('business');
+
         $cart = session()->get(self::CART_KEY) ?? [];
         $catalogModel = new CatalogItemModel();
+        $availabilityModel = new \App\Models\AvailabilityModel();
         $items = [];
         $subtotal = 0;
         $depositTotal = 0;
@@ -138,7 +142,18 @@ class Checkout extends BaseController
             if (!$product) {
                 continue;
             }
-            $lineTotal = $product['base_price'] * $line['qty'];
+
+            $branchId = !empty($line['branch_id']) ? (int) $line['branch_id'] : null;
+
+            $price = $availabilityModel->estimatePrice(
+                $product,
+                $branchId,
+                $line['start_at'],
+                $line['end_at'],
+                (int) $line['qty']
+            );
+            $lineTotal = $price['subtotal'];
+
             $subtotal += $lineTotal;
             $depositTotal += ($product['deposit_required'] ? $product['deposit_amount'] * $line['qty'] : 0);
 
@@ -149,6 +164,8 @@ class Checkout extends BaseController
                 'start_at' => $line['start_at'],
                 'end_at' => $line['end_at'],
                 'line_total' => $lineTotal,
+                'business_name' => business_name($product['business_id'] ?? null),
+                'branch_name' => branch_name($branchId),
             ];
         }
 
@@ -203,16 +220,22 @@ class Checkout extends BaseController
 
         $custData = $checkoutData['customer'];
 
-        $existingCustomer = $customerModel->where('phone', $custData['phone'])->first();
-        if ($existingCustomer) {
-            $customerId = $existingCustomer['id'];
+            if (session()->get('customer_logged_in') && session()->get('customer_id')) {
+            // Sudah login: pakai akun yang sedang login, jangan cari lewat nomor HP
+            $customerId = (int) session()->get('customer_id');
         } else {
-            $customerId = $customerModel->insert([
-                'name' => $custData['name'],
-                'phone' => $custData['phone'],
-                'email' => $custData['email'] ?? null,
-                'notes' => $custData['notes'] ?? null,
-            ]);
+            $phone = $this->normalizePhone($custData['phone']);
+            $existingCustomer = $customerModel->where('phone', $phone)->first();
+            if ($existingCustomer) {
+                $customerId = (int) $existingCustomer['id'];
+            } else {
+                $customerId = $customerModel->insert([
+                    'name' => $custData['name'],
+                    'phone' => $phone,
+                    'email' => $custData['email'] ?? null,
+                    'notes' => $custData['notes'] ?? null,
+                ]);
+            }
         }
 
         $earliestStart = null;
@@ -271,7 +294,7 @@ class Checkout extends BaseController
 
         $bookingId = $bookingModel->insert([
             'invoice_no' => $invoiceNo,
-            'business_id' => 1,
+            'business_id' => (int) ($cartLines[0]['product']['business_id'] ?? 1),
             'customer_id' => $customerId,
             'booking_source' => 'WEB',
             'start_at' => $earliestStart,
@@ -341,6 +364,22 @@ class Checkout extends BaseController
             }
         }
 
+        // Isi bookings.branch_id dari cabang resource yang benar-benar teralokasi
+        $branchRows = $db->query(
+            'SELECT DISTINCT r.branch_id
+               FROM booking_items bi
+               JOIN booking_resource_allocations a ON a.booking_item_id = bi.id
+               JOIN resources r ON r.id = a.resource_id
+              WHERE bi.booking_id = ? AND r.branch_id IS NOT NULL',
+            [$bookingId]
+        )->getResultArray();
+
+        if (count($branchRows) === 1) {
+            $db->table('bookings')->where('id', $bookingId)->update([
+                'branch_id' => (int) $branchRows[0]['branch_id'],
+            ]);
+        }
+
         $db->transComplete();
 
         if ($db->transStatus() === false) {
@@ -394,11 +433,17 @@ class Checkout extends BaseController
         return 'INV-' . date('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
     }
 
+        private function normalizePhone(string $phone): string
+    {
+        return (new \App\Libraries\OtpService())->normalizePhone($phone) ?? trim($phone);
+    }
+
     /**
  * Sisa detik freeze booking untuk nomor HP ini (0 = boleh booking).
  */
 private function cooldownRemaining(string $phone): int
 {
+    $phone = $this->normalizePhone($phone);
     (new \App\Models\AvailabilityModel())->expireStaleBookings();
 
     $customer = (new CustomerModel())->where('phone', $phone)->first();

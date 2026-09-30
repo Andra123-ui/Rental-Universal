@@ -53,6 +53,11 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <h2 style="font-size:1.4rem;">
                         <?= esc($item['name']) ?>
                     </h2>
+                    <?php if (!empty($businessName)): ?>
+                    <div style="margin-top:4px;font-size:.88rem;color:var(--muted);">
+                        Disediakan oleh <strong style="color:inherit;"><?= esc($businessName) ?></strong>
+                    </div>
+                    <?php endif; ?>
                     <div class="detail-price">
                         Rp
                         <?= number_format($item['base_price'], 0, ',', '.') ?>
@@ -78,6 +83,25 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                         </strong> berlaku untuk item ini dan akan dikembalikan sesuai syarat & ketentuan.
                     </div>
                     <?php endif; ?>
+                    <?php if (!empty($itemBranches)): ?>
+                    <div class="branch-info">
+                        <h4>Lokasi Cabang</h4>
+                        <?php foreach ($itemBranches as $b): ?>
+                        <div class="branch-info-item">
+                            <strong><?= esc($b['name']) ?></strong>
+                            <?php if (!empty($b['address'])): ?>
+                            <div class="bi-row"><span>Alamat</span> <?= esc($b['address']) ?></div>
+                            <?php endif; ?>
+                            <?php if (!empty($b['phone'])): ?>
+                            <div class="bi-row"><span>No. HP</span>
+                                <a
+                                    href="tel:<?= esc(preg_replace('/[^\d+]/', '', $b['phone'])) ?>"><?= esc($b['phone']) ?></a>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -85,6 +109,18 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             <!-- Booking card: kalender ketersediaan + tambah ke keranjang -->
             <div class="booking-card">
                 <h3>Cek Ketersediaan</h3>
+                <?php if (!empty($itemBranches)): ?>
+                <div class="branch-select-wrap">
+                    <label for="branch-select">Pilih Cabang</label>
+                    <select id="branch-select" class="branch-select">
+                        <option value="">Semua cabang</option>
+                        <?php foreach ($itemBranches as $b): ?>
+                        <option value="<?= (int) $b['id'] ?>"><?= esc($b['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div id="branch-note" class="branch-note"></div>
+                </div>
+                <?php endif; ?>
 
                 <div class="cal-legend">
                     <span><i class="dot dot-ok"></i> Tersedia</span>
@@ -108,6 +144,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <input type="hidden" name="catalog_item_id" value="<?= esc($item['id']) ?>">
                     <input type="hidden" name="start_at" id="input_start_at">
                     <input type="hidden" name="qty" value="1">
+                    <input type="hidden" name="branch_id" id="input_branch_id" value="">
                     <input type="hidden" name="end_at" id="input_end_at">
                     <?= csrf_field() ?>
 
@@ -155,6 +192,98 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 </section>
 
 <style>
+.branch-info {
+    margin-top: 20px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.branch-info h4 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+}
+
+.branch-info-item+.branch-info-item {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--line);
+}
+
+.branch-info-item .bi-row {
+    font-size: .88rem;
+    color: var(--muted);
+    margin-top: 3px;
+    line-height: 1.5;
+}
+
+.branch-info-item .bi-row span {
+    display: inline-block;
+    min-width: 56px;
+    font-weight: 600;
+    color: inherit;
+}
+
+.branch-select-wrap {
+    margin-bottom: 14px;
+}
+
+.branch-select-wrap label {
+    display: block;
+    font-size: .82rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.branch-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: .92rem;
+    background: #fff;
+}
+
+.branch-note {
+    margin-top: 6px;
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.cal-day .d-branch {
+    font-size: .52rem;
+    line-height: 1.1;
+    font-weight: 600;
+    text-align: center;
+    opacity: .9;
+    margin-top: 1px;
+}
+
+.cs-branches {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cs-branches li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: .8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .6);
+}
+
+.cs-branches li.b-full {
+    opacity: .55;
+    text-decoration: line-through;
+}
+
 .cal-legend {
     display: flex;
     gap: 14px;
@@ -340,7 +469,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 
 <script>
 (function() {
-    const CALENDAR_DATA = <?= json_encode($calendarData) ?>;
+    const CALENDAR_DATA = <?= json_encode($calendarData, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+    const BRANCHES = <?= json_encode($itemBranches ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
     const dowNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September',
         'Oktober', 'November', 'Desember'
@@ -350,6 +480,16 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 
     function formatRupiah(n) {
         return 'Rp' + Math.round(n).toLocaleString('id-ID');
+    }
+
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        } [c]));
     }
 
     function countUnits(startKey, endKey) {
@@ -374,6 +514,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         viewMonth = minMonth;
     let selStart = null,
         selEnd = null;
+    let selBranch = ''; // '' = semua cabang, selain itu id cabang (string)
 
     const dowEl = document.getElementById('cal-dow');
     dowNames.forEach(n => {
@@ -388,6 +529,32 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 
     function key(y, m, d) {
         return `${y}-${pad(m)}-${pad(d)}`;
+    }
+
+    // Data ketersediaan per tanggal, sudah menyesuaikan cabang yang dipilih
+    function getInfo(dateKey) {
+        const info = CALENDAR_DATA[dateKey];
+        if (!info) return null;
+        if (!selBranch) return info;
+        const b = (info.branches || []).find(x => String(x.id) === selBranch);
+        if (!b) return {
+            total: 0,
+            available: 0,
+            branches: []
+        };
+        return {
+            total: b.total,
+            available: b.available,
+            branches: [b]
+        };
+    }
+
+    function shortCode(b) {
+        return String(b.code || b.name || '').replace(/^BR-/i, '');
+    }
+
+    function availBranches(info) {
+        return (info && info.branches ? info.branches : []).filter(b => b.available > 0);
     }
 
     function renderCalendar() {
@@ -410,7 +577,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             const dateKey = key(viewYear, viewMonth, d);
             const cellDate = new Date(viewYear, viewMonth - 1, d);
             cellDate.setHours(0, 0, 0, 0);
-            const info = CALENDAR_DATA[dateKey];
+            const info = getInfo(dateKey);
             const el = document.createElement('div');
             el.className = 'cal-day';
 
@@ -436,6 +603,15 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     sub.className = 'd-info';
                     sub.textContent = info.total > 1 ? `${label} (${info.available}/${info.total})` : label;
                     el.appendChild(sub);
+                }
+
+                const ab = availBranches(info);
+                if (ab.length) {
+                    const br = document.createElement('div');
+                    br.className = 'd-branch';
+                    br.textContent = ab.map(shortCode).join(' · ');
+                    el.appendChild(br);
+                    el.title = ab.map(b => `${b.name}: tersisa ${b.available}/${b.total}`).join('\n');
                 }
             }
 
@@ -477,8 +653,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             minAvailable = null;
         const cursor = new Date(start);
         while (cursor <= end) {
-            const k = `${cursor.getFullYear()}-${pad(cursor.getMonth() + 1)}-${pad(cursor.getDate())}`;
-            const info = CALENDAR_DATA[k];
+            const k = key(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate());
+            const info = getInfo(k);
             if (info) {
                 total = info.total;
                 minAvailable = (minAvailable === null) ? info.available : Math.min(minAvailable, info.available);
@@ -491,10 +667,48 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         };
     }
 
-    function setSelectionCard(cssClass, title, sub) {
+    function getRangeBranches(startKey, endKey) {
+        const map = {};
+        let days = 0;
+        const cursor = new Date(startKey + 'T00:00:00');
+        const end = new Date(endKey + 'T00:00:00');
+        while (cursor <= end) {
+            days++;
+            const k = key(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate());
+            const info = getInfo(k);
+            ((info && info.branches) || []).forEach(b => {
+                const id = b.code || b.name;
+                if (!map[id]) {
+                    map[id] = {
+                        name: b.name,
+                        min: b.available,
+                        days: 1
+                    };
+                } else {
+                    map[id].min = Math.min(map[id].min, b.available);
+                    map[id].days++;
+                }
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        return Object.values(map).map(b => ({
+            name: b.name,
+            min: b.days < days ? 0 : b.min
+        }));
+    }
+
+    function branchListHtml(list) {
+        if (!list.length) return '';
+        return '<ul class="cs-branches">' + list.map(b =>
+            `<li class="${b.min > 0 ? 'b-ok' : 'b-full'}"><span>${esc(b.name)}</span><strong>${b.min > 0 ? 'tersisa ' + b.min + ' unit' : 'habis'}</strong></li>`
+        ).join('') + '</ul>';
+    }
+
+    function setSelectionCard(cssClass, title, sub, extraHtml) {
         const box = document.getElementById('cal-selection');
         box.className = 'cal-selection' + (cssClass ? ' ' + cssClass : '');
-        box.innerHTML = `<p class="cs-title">${title}</p>` + (sub ? `<p class="cs-sub">${sub}</p>` : '');
+        box.innerHTML = `<p class="cs-title">${title}</p>` + (sub ? `<p class="cs-sub">${sub}</p>` : '') + (
+            extraHtml || '');
     }
 
     function updateSelectionUI() {
@@ -505,6 +719,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                 total,
                 minAvailable
             } = getRangeStock(selStart, selEnd);
+            const branchHtml = branchListHtml(getRangeBranches(selStart, selEnd));
+
             document.getElementById('input_start_at').value = `${selStart} 00:00:00`;
             const endDate = new Date(selEnd + 'T00:00:00');
             endDate.setDate(endDate.getDate() + 1);
@@ -517,31 +733,68 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                 `${fmtDate(selStart)} — ${fmtDate(selEnd)} · ${units} ${PRICING_UNIT === 'SESSION' ? 'sesi' : PRICING_UNIT === 'NIGHT' ? 'malam' : 'hari'} · ${formatRupiah(BASE_PRICE)} x ${units} = ${formatRupiah(estTotal)}`;
 
             if (total === null || minAvailable <= 0) {
-                setSelectionCard('cs-full', 'Habis pada rentang ini', rangeLabel);
+                setSelectionCard('cs-full', 'Habis pada rentang ini', rangeLabel, branchHtml);
                 btnTambah.disabled = true;
             } else if (minAvailable < total) {
-                setSelectionCard('cs-limited', `Terbatas — tersisa ${minAvailable} unit`, rangeLabel);
+                setSelectionCard('cs-limited', `Terbatas — tersisa ${minAvailable} unit`, rangeLabel, branchHtml);
                 btnTambah.disabled = false;
             } else {
-                setSelectionCard('cs-ok', `Tersedia — stok ${total} unit`, rangeLabel);
+                setSelectionCard('cs-ok', `Tersedia — stok ${total} unit`, rangeLabel, branchHtml);
                 btnTambah.disabled = false;
             }
         } else if (selStart) {
-            const single = CALENDAR_DATA[selStart];
+            const single = getInfo(selStart);
+            const branchHtml = branchListHtml(((single && single.branches) || []).map(b => ({
+                name: b.name,
+                min: b.available
+            })));
             if (single && single.available > 0 && single.available < single.total) {
                 setSelectionCard('cs-limited', `Terbatas — tersisa ${single.available} unit`,
-                    `${fmtDate(selStart)} — pilih tanggal selesai`);
+                    `${fmtDate(selStart)} — pilih tanggal selesai`, branchHtml);
             } else if (single && single.available > 0) {
                 setSelectionCard('cs-ok', `Tersedia — stok ${single.total} unit`,
-                    `${fmtDate(selStart)} — pilih tanggal selesai`);
+                    `${fmtDate(selStart)} — pilih tanggal selesai`, branchHtml);
             } else {
-                setSelectionCard('', `${fmtDate(selStart)}`, 'Pilih tanggal selesai');
+                setSelectionCard('', `${fmtDate(selStart)}`, 'Pilih tanggal selesai', branchHtml);
             }
             btnTambah.disabled = true;
         } else {
             setSelectionCard('', 'Pilih tanggal mulai di kalender.', null);
             btnTambah.disabled = true;
         }
+    }
+
+    // ===== Pilih cabang =====
+    const branchSelect = document.getElementById('branch-select');
+    const branchNote = document.getElementById('branch-note');
+    const branchInput = document.getElementById('input_branch_id');
+
+    function updateBranchNote() {
+        if (!branchNote) return;
+        const b = BRANCHES.find(x => String(x.id) === selBranch);
+        if (!b) {
+            branchNote.innerHTML = '';
+            return;
+        }
+        let html = '';
+        if (b.address) html += `<div>📍 ${esc(b.address)}</div>`;
+        if (b.phone) html += `<div>📞 ${esc(b.phone)}</div>`;
+        branchNote.innerHTML = html;
+    }
+
+    if (branchSelect) {
+        branchSelect.addEventListener('change', () => {
+            selBranch = branchSelect.value;
+            if (branchInput) branchInput.value = selBranch;
+            // reset pilihan tanggal karena stok tiap cabang berbeda
+            selStart = null;
+            selEnd = null;
+            document.getElementById('input_start_at').value = '';
+            document.getElementById('input_end_at').value = '';
+            updateBranchNote();
+            updateSelectionUI();
+            renderCalendar();
+        });
     }
 
     document.getElementById('cal-prev').addEventListener('click', () => {

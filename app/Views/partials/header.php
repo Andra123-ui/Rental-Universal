@@ -2123,12 +2123,12 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                     </button>
 
                     <div class="account-menu">
-                        <a href="<?= site_url('account/dashboard') ?>">
+                        <a href="<?= site_url('account/profile') ?>">
                             <i class="ti-user"></i>
                             Akun Saya
                         </a>
 
-                        <a href="<?= base_url('/cek-booking') ?>">
+                        <a href="<?= base_url('/account/booking') ?>">
                             <i class="ti-receipt"></i>
                             Cek Booking
                         </a>
@@ -2160,7 +2160,7 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                             Masuk / Daftar
                         </a>
 
-                        <a href="<?= base_url('/cek-booking') ?>">
+                        <a href="<?= base_url('/account/booking') ?>">
                             <i class="ti-receipt"></i>
                             Cek Booking
                         </a>

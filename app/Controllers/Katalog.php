@@ -71,6 +71,7 @@ class Katalog extends BaseController
 
     public function detail(string $hash)
   {
+    helper('business');
     $id = id_decode($hash);
     if ($id === null) {
       throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
@@ -102,15 +103,47 @@ class Katalog extends BaseController
     // Kalender ketersediaan: dihitung langsung di sini (server-side), digabung
     // untuk 3 bulan ke depan (bulan ini + 2 bulan berikutnya), jadi view tidak
     // perlu AJAX/route terpisah lagi.
-    $availabilityModel = new \App\Models\AvailabilityModel();
-    $calendarData = [];
-    $cursor = new \DateTime('first day of this month');
-    for ($i = 0; $i < 3; $i++) {
-      $y = (int) $cursor->format('Y');
-      $m = (int) $cursor->format('n');
-      $calendarData += $availabilityModel->getMonthlyAvailability($id, null, $y, $m);
+        $availabilityModel = new \App\Models\AvailabilityModel();
+        $branches = $this->getActiveBranches((int) ($item['business_id'] ?? 1));
+
+        $calendarData = [];
+        $usedBranchIds = [];
+        $cursor = new \DateTime('first day of this month');
+        for ($i = 0; $i < 3; $i++) {
+        $y = (int) $cursor->format('Y');
+        $m = (int) $cursor->format('n');
+
+      $monthAll = $availabilityModel->getMonthlyAvailability($id, null, $y, $m);
+
+      $perBranch = [];
+      foreach ($branches as $b) {
+        $perBranch[$b['id']] = $availabilityModel->getMonthlyAvailability($id, (int) $b['id'], $y, $m);
+      }
+
+      foreach ($monthAll as $dateKey => $info) {
+        $info['branches'] = [];
+        foreach ($branches as $b) {
+          $bi = $perBranch[$b['id']][$dateKey] ?? null;
+          if (!$bi || (int) ($bi['total'] ?? 0) <= 0) {
+            continue;
+          }
+          $usedBranchIds[$b['id']] = true;
+          $info['branches'][] = [
+            'id' => (int) $b['id'],
+            'code' => $b['code'],
+            'name' => $b['name'],
+            'available' => (int) $bi['available'],
+            'total' => (int) $bi['total'],
+          ];
+        }
+        $calendarData[$dateKey] = $info;
+      }
+
       $cursor->modify('+1 month');
     }
+
+    // Cabang yang benar-benar punya resource untuk item ini (untuk dropdown & info alamat)
+    $itemBranches = array_values(array_filter($branches, fn($b) => isset($usedBranchIds[$b['id']])));
 
     $bookingCount = $availabilityModel->getBookingCount($id);
 
@@ -122,7 +155,30 @@ class Katalog extends BaseController
       'relatedImages' => $relatedImages,
       'calendarData' => $calendarData,
       'bookingCount' => $bookingCount,
+      'itemBranches' => $itemBranches,
+      'businessName' => business_name($item['business_id'] ?? null),
     ]);
+  }
+
+    /**
+   * Daftar cabang aktif untuk label di kalender ketersediaan.
+   */
+    private function getActiveBranches(int $businessId = 1): array
+  {
+    $rows = db_connect()->table('branches')
+      ->select('id, branch_code, branch_name, address, phone')
+      ->where('business_id', $businessId)
+      ->where('is_active', 1)
+      ->orderBy('id', 'ASC')
+      ->get()->getResultArray();
+
+    return array_map(fn($r) => [
+      'id' => (int) $r['id'],
+      'code' => $r['branch_code'],
+      'name' => $r['branch_name'],
+      'address' => $r['address'] ?? '',
+      'phone' => $r['phone'] ?? '',
+    ], $rows);
   }
 
   /**

@@ -38,6 +38,7 @@ class Cart extends BaseController
                 'key' => $key,
                 'product' => $product,
                 'qty' => $line['qty'],
+                'branch_id' => $line['branch_id'] ?? null,
                 'start_at' => $line['start_at'],
                 'end_at' => $line['end_at'],
                 'line_total' => $lineTotal,

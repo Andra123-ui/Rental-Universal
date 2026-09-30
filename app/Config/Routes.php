@@ -14,14 +14,6 @@ $routes->get('/', 'Home::index');
 $routes->get('/catalog', 'Katalog::index');
 $routes->get('/item/cek-tersedia/(:any)', 'Katalog::cekTersedia/$1');
 $routes->get('/item/(:any)', 'Katalog::detail/$1');
-$routes->get('item/kalender-tersedia/(:segment)', 'Katalog::kalenderTersedia/$1');
-
-// =====================================================
-// AVAILABILITY 
-// =====================================================
-
-$routes->get('availability', 'Availability::index');
-$routes->get('availability/cek/(:num)', 'Availability::cek/$1');
 
 // =====================================================
 // CART
@@ -89,14 +81,28 @@ $routes->get('/terms', 'Terms::index');
 $routes->get('/help', 'Help::index');
 
 // =====================================================
-// SYARAT & KETENTUAN
+// TRACKING & PAYMENT
 // =====================================================
 
-$routes->get('terms', 'Terms::index');
+$routes->get('/track/(:segment)', 'Tracking::index/$1');
+
+$routes->get(
+    '/track/(:segment)/payment',
+    'Payment::index/$1'
+);
+
+$routes->post(
+    '/track/(:segment)/payment/process',
+    'Payment::process/$1'
+);
+
+
 
 // =====================================================
 // CUSTOMER AUTH (OTP WhatsApp)
 // =====================================================
+
+$routes->get('account/booking', 'AccountBooking::index');
 
 $routes->group('account', [
     'namespace' => 'App\Controllers\Customer'
@@ -115,6 +121,13 @@ $routes->group('account', [
     // CAUTH-03 — hanya boleh diakses yang sudah login (bukan yang sudah lengkap profil)
     $routes->get('onboarding', 'AuthController::onboardingForm', ['filter' => 'customerAuth']);
     $routes->post('onboarding', 'AuthController::onboardingSubmit', ['filter' => 'customerAuth']);
+
+    // ===================================================== // CUSTOMER PROFILE // ===================================================== 
+    $routes->get('profile', 'ProfileController::index', [ 'filter' => 'customerAuth' ]); 
+    $routes->post('profile/update', 'ProfileController::update', [ 'filter' => 'customerAuth' ]); 
+    // Ganti nomor WhatsApp 
+    $routes->post('profile/phone/send-otp', 'ProfileController::sendPhoneOtp', [ 'filter' => 'customerAuth' ]); 
+    $routes->post('profile/phone/verify', 'ProfileController::verifyPhoneOtp', [ 'filter' => 'customerAuth' ]);
 
     // CAUTH-04
     $routes->post('logout', 'AuthController::logout');

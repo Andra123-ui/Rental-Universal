@@ -20,10 +20,24 @@ class Home extends BaseController
             ->orderBy('sort_order', 'ASC')
             ->findAll(6);
 
-        // Ambil produk aktif untuk landing + hero
+        // Ambil 6 produk yang paling banyak dipesan
         $catalogItems = $catalogModel
-            ->where('status', 'ACTIVE')
-            ->orderBy('created_at', 'DESC')
+            ->select('catalog_items.*, COUNT(DISTINCT b.id) AS total_booked')
+            ->join(
+                'booking_items bi',
+                'bi.catalog_item_id = catalog_items.id',
+                'left'
+            )
+            ->join(
+                'bookings b',
+                "b.id = bi.booking_id
+                 AND b.status NOT IN ('CANCELLED', 'EXPIRED')",
+                'left'
+            )
+            ->where('catalog_items.status', 'ACTIVE')
+            ->groupBy('catalog_items.id')
+            ->orderBy('total_booked', 'DESC')
+            ->orderBy('catalog_items.created_at', 'DESC')
             ->findAll(6);
 
         $itemIds = array_column($catalogItems, 'id');

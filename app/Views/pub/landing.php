@@ -174,63 +174,118 @@ helper(['image', 'idhash']);
     <div class="wrap">
         <div class="section-head-row">
             <div class="section-head">
-                <span class="eyebrow">Pilihan Terbaik</span>
-                <h2>Produk & layanan pilihan</h2>
-                <p>Beberapa item yang sedang tersedia untuk disewa.</p>
+                <span class="eyebrow">Paling Diminati</span>
+                <h2>Produk yang paling banyak dipesan</h2>
+                <p>Produk dan layanan yang paling sering disewa pelanggan.</p>
             </div>
-            <a href="<?= base_url('/catalog') ?>" class="btn btn-outline">Lihat semua produk</a>
+
+            <a href="<?= base_url('/catalog') ?>" class="btn btn-outline">
+                Lihat semua produk
+            </a>
         </div>
+
         <div class="card-grid">
             <?php if (empty($catalogItems)): ?>
+
             <div class="empty-state">
                 <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 8l-9-5-9 5 9 5 9-5z" />
+                    <path d="M21 8l-9-5-9 5 9-5z" />
                     <path d="M3 8v8l9 5 9-5V8" />
                 </svg>
+
                 <h3>Belum ada produk atau jasa</h3>
-                <p>Tambahkan item pertama Anda lewat menu Katalog di dashboard admin.</p>
+                <p>
+                    Produk yang paling banyak dipesan akan muncul di sini.
+                </p>
             </div>
+
             <?php else: ?>
+
             <?php foreach ($catalogItems as $i => $item):
-                    $imgUrl = item_image_url($imageMap[$item['id']] ?? null, 'item-' . $item['id']);
-                    ?>
+                $imgUrl = item_image_url(
+                    $imageMap[$item['id']] ?? null,
+                    'item-' . $item['id']
+                );
+            ?>
+
             <div class="item-card">
-                <?php if ($i === 0): ?><span class="item-ribbon">Terbaru</span>
+
+                <?php if ($i === 0): ?>
+                <span class="item-ribbon">Populer</span>
                 <?php endif; ?>
-                <div class="item-media"
-                    style="background-image:url('<?= esc($imgUrl) ?>');background-size:cover;background-position:center;">
+
+                <div class="item-media" style="background-image:url('<?= esc($imgUrl) ?>');
+                           background-size:cover;
+                           background-position:center;">
                 </div>
+
                 <div class="item-body">
+
                     <span class="item-type">
                         <?= esc($item['item_type']) ?>
                     </span>
+
                     <h3>
                         <?= esc($item['name']) ?>
                     </h3>
+
                     <p>
-                        <?= esc(mb_strimwidth($item['description'] ?? 'Detail lengkap tersedia di halaman produk.', 0, 90, '...')) ?>
+                        <?= esc(
+                            mb_strimwidth(
+                                $item['description'] ?? 'Detail lengkap tersedia di halaman produk.',
+                                0,
+                                90,
+                                '...'
+                            )
+                        ) ?>
                     </p>
+
                     <div class="item-meta-row">
-                        <span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
+
+                        <span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
                                 stroke-linejoin="round">
                                 <circle cx="12" cy="12" r="9" />
                                 <path d="M12 7v5l3.5 2" />
-                            </svg> per
-                            <?= esc($item['unit_label']) ?>
+                            </svg>
+
+                            per <?= esc($item['unit_label']) ?>
                         </span>
+
+                        <span>
+                            <?= number_format(
+                                (int) ($item['total_booked'] ?? 0),
+                                0,
+                                ',',
+                                '.'
+                            ) ?>
+                            kali dipesan
+                        </span>
+
                     </div>
+
                     <div class="item-footer">
-                        <div class="item-price">Rp
-                            <?= number_format($item['base_price'], 0, ',', '.') ?> <small>/
-                                <?= esc($item['unit_label']) ?>
+
+                        <div class="item-price">
+                            Rp <?= number_format($item['base_price'], 0, ',', '.') ?>
+
+                            <small>
+                                / <?= esc($item['unit_label']) ?>
                             </small>
                         </div>
+
                         <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
-                            style="padding:8px 14px;font-size:0.85rem;">Detail</a>
+                            style="padding:8px 14px;font-size:0.85rem;">
+                            Detail
+                        </a>
+
                     </div>
+
                 </div>
             </div>
+
             <?php endforeach; ?>
+
             <?php endif; ?>
         </div>
     </div>
