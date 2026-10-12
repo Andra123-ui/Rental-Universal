@@ -28,38 +28,38 @@ helper(['image', 'idhash']);
             <div class="hero-art">
 
                 <?php
-    $heroItems = array_slice($catalogItems, 0, 4);
-    ?>
+                $heroItems = array_slice($catalogItems, 0, 4);
+                ?>
 
                 <?php foreach ($heroItems as $index => $item): ?>
 
-                <?php
-        $imgUrl = item_image_url(
-            $imageMap[$item['id']] ?? null,
-            'hero-' . $item['id']
-        );
-        ?>
+                    <?php
+                    $imgUrl = item_image_url(
+                        $imageMap[$item['id']] ?? null,
+                        'hero-' . $item['id']
+                    );
+                    ?>
 
-                <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>"
-                    class="hero-product-card hero-card-<?= $index + 1 ?>">
+                    <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>"
+                        class="hero-product-card hero-card-<?= $index + 1 ?>">
 
-                    <div class="hero-product-image">
-                        <img src="<?= esc($imgUrl) ?>" alt="<?= esc($item['name']) ?>">
-                    </div>
+                        <div class="hero-product-image">
+                            <img src="<?= esc($imgUrl) ?>" alt="<?= esc($item['name']) ?>">
+                        </div>
 
-                    <div class="hero-product-info">
+                        <div class="hero-product-info">
 
-                        <span>
-                            <?= esc($item['item_type'] ?? 'Produk') ?>
-                        </span>
+                            <span>
+                                <?= esc($item['item_type'] ?? 'Produk') ?>
+                            </span>
 
-                        <strong>
-                            <?= esc($item['name']) ?>
-                        </strong>
+                            <strong>
+                                <?= esc($item['name']) ?>
+                            </strong>
 
-                    </div>
+                        </div>
 
-                </a>
+                    </a>
 
                 <?php endforeach; ?>
 
@@ -139,31 +139,31 @@ helper(['image', 'idhash']);
         </div>
         <div class="card-grid">
             <?php if (empty($categories)): ?>
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7" rx="1" />
-                    <rect x="14" y="3" width="7" height="7" rx="1" />
-                    <rect x="3" y="14" width="7" height="7" rx="1" />
-                    <rect x="14" y="14" width="7" height="7" rx="1" />
-                </svg>
-                <h3>Kategori belum ditambahkan</h3>
-                <p>Tambahkan kategori lewat menu Katalog di dashboard admin agar tampil di halaman ini.</p>
-            </div>
-            <?php else: ?>
-            <?php foreach ($categories as $cat): ?>
-            <div class="cat-card">
-                <div class="cat-card-img"
-                    style="background-image:url('<?= esc(category_image_url($cat['slug'])) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7" rx="1" />
+                        <rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" />
+                        <rect x="14" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                    <h3>Kategori belum ditambahkan</h3>
+                    <p>Tambahkan kategori lewat menu Katalog di dashboard admin agar tampil di halaman ini.</p>
                 </div>
-                <h3>
-                    <?= esc($cat['name']) ?>
-                </h3>
-                <p>
-                    <?= esc($cat['description'] ?? 'Lihat pilihan yang tersedia di kategori ini.') ?>
-                </p>
-                <a class="link" href="<?= base_url('/catalog?kategori=' . $cat['slug']) ?>">Lihat kategori &rarr;</a>
-            </div>
-            <?php endforeach; ?>
+            <?php else: ?>
+                <?php foreach ($categories as $cat): ?>
+                    <div class="cat-card">
+                        <div class="cat-card-img"
+                            style="background-image:url('<?= esc(category_image_url($cat['slug'])) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
+                        </div>
+                        <h3>
+                            <?= esc($cat['name']) ?>
+                        </h3>
+                        <p>
+                            <?= esc($cat['description'] ?? 'Lihat pilihan yang tersedia di kategori ini.') ?>
+                        </p>
+                        <a class="link" href="<?= base_url('/catalog?kategori=' . $cat['slug']) ?>">Lihat kategori &rarr;</a>
+                    </div>
+                <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>
@@ -184,108 +184,116 @@ helper(['image', 'idhash']);
             </a>
         </div>
 
+        <!-- ====== TAMBAHAN: FILTER CABANG ====== -->
+        <div class="branch-filter" style="margin-bottom: 24px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <!-- Tombol Semua Cabang -->
+            <a href="<?= base_url('/?cabang=semua#produk') ?>"
+                class="btn <?= $selectedBranch === 'semua' ? 'btn-primary' : 'btn-outline' ?>"
+                style="padding: 8px 16px; border-radius: 99px; font-size: 0.9rem;">
+                Semua Cabang
+            </a>
+
+            <!-- Loop Tombol Cabang -->
+            <?php foreach ($branches as $branch): ?>
+                <a href="<?= base_url('/?cabang=' . $branch['branch_code'] . '#produk') ?>"
+                    class="btn <?= $selectedBranch === $branch['branch_code'] ? 'btn-primary' : 'btn-outline' ?>"
+                    style="padding: 8px 16px; border-radius: 99px; font-size: 0.9rem;">
+                    <?= esc($branch['branch_name']) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <!-- ====== END FILTER CABANG ====== -->
+
         <div class="card-grid">
             <?php if (empty($catalogItems)): ?>
 
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 8l-9-5-9 5 9-5z" />
-                    <path d="M3 8v8l9 5 9-5V8" />
-                </svg>
-
-                <h3>Belum ada produk atau jasa</h3>
-                <p>
-                    Produk yang paling banyak dipesan akan muncul di sini.
-                </p>
-            </div>
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 8l-9-5-9 5 9-5z" />
+                        <path d="M3 8v8l9 5 9-5V8" />
+                    </svg>
+                    <h3>Belum ada produk atau jasa</h3>
+                    <p>Produk yang paling banyak dipesan akan muncul di sini.</p>
+                </div>
 
             <?php else: ?>
 
-            <?php foreach ($catalogItems as $i => $item):
-                $imgUrl = item_image_url(
-                    $imageMap[$item['id']] ?? null,
-                    'item-' . $item['id']
-                );
-            ?>
+                <?php foreach ($catalogItems as $i => $item):
+                    $imgUrl = item_image_url(
+                        $imageMap[$item['id']] ?? null,
+                        'item-' . $item['id']
+                    );
+                    ?>
 
-            <div class="item-card">
+                    <div class="item-card">
+                        <?php if ($i === 0 && $selectedBranch !== 'semua'): ?>
+                            <span class="item-ribbon">Populer</span>
+                        <?php elseif ($i === 0 && $selectedBranch === 'semua'): ?>
+                            <!-- Opsional: Sembunyikan ribbon jika 'semua' atau tetap tampilkan -->
+                            <span class="item-ribbon">Terbaru</span>
+                        <?php endif; ?>
 
-                <?php if ($i === 0): ?>
-                <span class="item-ribbon">Populer</span>
-                <?php endif; ?>
-
-                <div class="item-media" style="background-image:url('<?= esc($imgUrl) ?>');
+                        <div class="item-media" style="background-image:url('<?= esc($imgUrl) ?>');
                            background-size:cover;
                            background-position:center;">
-                </div>
-
-                <div class="item-body">
-
-                    <span class="item-type">
-                        <?= esc($item['item_type']) ?>
-                    </span>
-
-                    <h3>
-                        <?= esc($item['name']) ?>
-                    </h3>
-
-                    <p>
-                        <?= esc(
-                            mb_strimwidth(
-                                $item['description'] ?? 'Detail lengkap tersedia di halaman produk.',
-                                0,
-                                90,
-                                '...'
-                            )
-                        ) ?>
-                    </p>
-
-                    <div class="item-meta-row">
-
-                        <span>
-                            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 7v5l3.5 2" />
-                            </svg>
-
-                            per <?= esc($item['unit_label']) ?>
-                        </span>
-
-                        <span>
-                            <?= number_format(
-                                (int) ($item['total_booked'] ?? 0),
-                                0,
-                                ',',
-                                '.'
-                            ) ?>
-                            kali dipesan
-                        </span>
-
-                    </div>
-
-                    <div class="item-footer">
-
-                        <div class="item-price">
-                            Rp <?= number_format($item['base_price'], 0, ',', '.') ?>
-
-                            <small>
-                                / <?= esc($item['unit_label']) ?>
-                            </small>
                         </div>
 
-                        <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
-                            style="padding:8px 14px;font-size:0.85rem;">
-                            Detail
-                        </a>
+                        <div class="item-body">
+                            <span class="item-type">
+                                <?= esc($item['item_type']) ?>
+                            </span>
+                            <h3>
+                                <?= esc($item['name']) ?>
+                            </h3>
+                            <p>
+                                <?= esc(
+                                    mb_strimwidth(
+                                        $item['description'] ?? 'Detail lengkap tersedia di halaman produk.',
+                                        0,
+                                        90,
+                                        '...'
+                                    )
+                                ) ?>
+                            </p>
 
+                            <div class="item-meta-row">
+                                <span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="9" />
+                                        <path d="M12 7v5l3.5 2" />
+                                    </svg>
+                                    per
+                                    <?= esc($item['unit_label']) ?>
+                                </span>
+
+                                <!-- ====== LOGIKA: SEMBUNYIKAN JIKA 'SEMUA CABANG' ====== -->
+                                <?php if ($selectedBranch !== 'semua' && isset($item['total_booked'])): ?>
+                                    <span>
+                                        <?= number_format((int) $item['total_booked'], 0, ',', '.') ?> kali dipesan
+                                    </span>
+                                <?php endif; ?>
+                                <!-- ====== END LOGIKA ====== -->
+
+                            </div>
+
+                            <div class="item-footer">
+                                <div class="item-price">
+                                    Rp
+                                    <?= number_format($item['base_price'], 0, ',', '.') ?>
+                                    <small>/
+                                        <?= esc($item['unit_label']) ?>
+                                    </small>
+                                </div>
+                                <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
+                                    style="padding:8px 14px;font-size:0.85rem;">
+                                    Detail
+                                </a>
+                            </div>
+                        </div>
                     </div>
 
-                </div>
-            </div>
-
-            <?php endforeach; ?>
-
+                <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>
