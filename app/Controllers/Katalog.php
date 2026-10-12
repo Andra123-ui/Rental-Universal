@@ -8,42 +8,71 @@ use App\Models\ItemMediaModel;
 
 class Katalog extends BaseController
 {
-  public function index()
+    public function index()
   {
+    helper('business');
+
+    $db = db_connect();
     $catalogModel = new CatalogItemModel();
     $categoryModel = new CategoryModel();
 
     $kategori = $this->request->getGet('kategori');
+    $jenis = $this->request->getGet('jenis');
+    $cabang = $this->request->getGet('cabang');
     $keyword = $this->request->getGet('q');
     $sort = $this->request->getGet('sort') ?? 'terbaru';
     $page = (int) ($this->request->getGet('page') ?? 1);
     $perPage = 9;
 
-    $builder = $catalogModel->where('status', 'ACTIVE');
+    // LEFT JOIN supaya item yang belum punya jenis tetap tampil.
+    // Semua kolom diberi awalan catalog_items. karena tabel jenis
+    // juga punya name, category_id, dan created_at.
+    $builder = $catalogModel
+      ->select('catalog_items.*, jenis.name AS jenis_name')
+      ->join('jenis', 'jenis.id = catalog_items.jenis_id', 'left')
+      ->where('catalog_items.status', 'ACTIVE');
 
     if (!empty($kategori)) {
       $cat = $categoryModel->where('slug', $kategori)->first();
       if ($cat) {
-        $builder = $builder->where('category_id', $cat['id']);
+        $builder = $builder->where('catalog_items.category_id', $cat['id']);
       }
+    }
+
+    if (!empty($jenis)) {
+      $builder = $builder->where('jenis.slug', $jenis);
+    }
+
+    // Cabang: item yang punya minimal satu resource aktif di cabang itu
+    if (!empty($cabang)) {
+      $builder = $builder->where(
+        'EXISTS (SELECT 1 FROM resources r
+                   JOIN branches b ON b.id = r.branch_id
+                  WHERE r.catalog_item_id = catalog_items.id
+                    AND r.deleted_at IS NULL
+                    AND b.is_active = 1
+                    AND b.branch_code = ' . $db->escape($cabang) . ')',
+        null,
+        false
+      );
     }
 
     if (!empty($keyword)) {
       $builder = $builder->groupStart()
-        ->like('name', $keyword)
-        ->orLike('description', $keyword)
+        ->like('catalog_items.name', $keyword)
+        ->orLike('catalog_items.description', $keyword)
         ->groupEnd();
     }
 
     switch ($sort) {
       case 'harga_rendah':
-        $builder = $builder->orderBy('base_price', 'ASC');
+        $builder = $builder->orderBy('catalog_items.base_price', 'ASC');
         break;
       case 'harga_tinggi':
-        $builder = $builder->orderBy('base_price', 'DESC');
+        $builder = $builder->orderBy('catalog_items.base_price', 'DESC');
         break;
       default:
-        $builder = $builder->orderBy('created_at', 'DESC');
+        $builder = $builder->orderBy('catalog_items.created_at', 'DESC');
     }
 
     $catalogItems = $builder->paginate($perPage, 'default', $page);
@@ -54,6 +83,16 @@ class Katalog extends BaseController
       ->orderBy('sort_order', 'ASC')
       ->findAll();
 
+    $businessId = (int) (site_business()['id'] ?? 1);
+    $jenisList = (new \App\Models\JenisModel())->forFilter($businessId);
+
+    $branches = $db->table('branches')
+      ->select('branch_code, branch_name')
+      ->where('business_id', $businessId)
+      ->where('is_active', 1)
+      ->orderBy('branch_name', 'ASC')
+      ->get()->getResultArray();
+
     $mediaModel = new ItemMediaModel();
     $itemIds = array_column($catalogItems, 'id');
     $imageMap = $mediaModel->getPrimaryImageMap($itemIds);
@@ -61,14 +100,18 @@ class Katalog extends BaseController
     return view('pub/katalog', [
       'catalogItems' => $catalogItems,
       'categories' => $categories,
+      'jenisList' => $jenisList,
+      'branches' => $branches,
       'pager' => $pager,
       'activeKategori' => $kategori,
+      'activeJenis' => $jenis,
+      'activeCabang' => $cabang,
       'keyword' => $keyword,
       'sort' => $sort,
       'imageMap' => $imageMap,
     ]);
   }
-
+  
     public function detail(string $hash)
   {
     helper('business');

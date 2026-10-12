@@ -112,8 +112,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                 <?php if (!empty($itemBranches)): ?>
                 <div class="branch-select-wrap">
                     <label for="branch-select">Pilih Cabang</label>
-                    <select id="branch-select" class="branch-select">
-                        <option value="">Semua cabang</option>
+                    <select id="branch-select" class="branch-select" required>
+                        <option value="" disabled selected>-- Pilih cabang dulu --</option>
                         <?php foreach ($itemBranches as $b): ?>
                         <option value="<?= (int) $b['id'] ?>"><?= esc($b['name']) ?></option>
                         <?php endforeach; ?>
@@ -148,8 +148,20 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <input type="hidden" name="end_at" id="input_end_at">
                     <?= csrf_field() ?>
 
-                    <button type="submit" id="btn-tambah" class="btn btn-primary"
-                        style="width:100%;justify-content:center;margin-top:16px;" disabled>Tambah ke Keranjang</button>
+                    <div style="display:flex;gap:10px;margin-top:16px;align-items:stretch;">
+                        <button type="submit" name="redirect" value="checkout" id="btn-tambah"
+                            class="btn btn-primary btn-cart-action"
+                            style="flex:1;justify-content:center;padding:15px 24px;font-size:1.02rem;" disabled>
+                            <i class="ti-credit-card"></i> Checkout
+                        </button>
+
+                        <button type="submit" name="redirect" value="cart" id="btn-keranjang"
+                            class="btn btn-outline btn-cart-action" title="Tambah ke Keranjang"
+                            aria-label="Tambah ke Keranjang"
+                            style="flex:0 0 auto;width:48px;padding:0;justify-content:center;" disabled>
+                            <i class="ti-shopping-cart"></i>
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -291,6 +303,11 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     color: var(--muted);
     margin-bottom: 12px;
     flex-wrap: wrap;
+}
+
+.cal-grid.locked {
+    opacity: .4;
+    pointer-events: none;
 }
 
 .cal-legend .dot {
@@ -531,6 +548,10 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         return `${y}-${pad(m)}-${pad(d)}`;
     }
 
+    function branchLocked() {
+        return BRANCHES.length > 0 && !selBranch;
+    }
+
     // Data ketersediaan per tanggal, sudah menyesuaikan cabang yang dipilih
     function getInfo(dateKey) {
         const info = CALENDAR_DATA[dateKey];
@@ -564,6 +585,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 
         const grid = document.getElementById('cal-grid');
         grid.innerHTML = '';
+        grid.classList.toggle('locked', branchLocked());
         const firstDow = new Date(viewYear, viewMonth - 1, 1).getDay();
         const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
 
@@ -627,6 +649,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     }
 
     function onPickDate(dateKey) {
+        if (branchLocked()) return;
         if (!selStart || (selStart && selEnd)) {
             selStart = dateKey;
             selEnd = null;
@@ -712,7 +735,18 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     }
 
     function updateSelectionUI() {
-        const btnTambah = document.getElementById('btn-tambah');
+        const btns = document.querySelectorAll('.btn-cart-action');
+        const btnTambah = {
+            set disabled(v) {
+                btns.forEach(b => b.disabled = v);
+            }
+        };
+
+        if (branchLocked()) {
+            setSelectionCard('', 'Pilih cabang terlebih dahulu.', 'Tanggal bisa dipilih setelah cabang dipilih.');
+            btnTambah.disabled = true;
+            return;
+        }
 
         if (selStart && selEnd) {
             const {
@@ -816,6 +850,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         renderCalendar();
     });
 
+    updateSelectionUI();
     renderCalendar();
 })();
 </script>

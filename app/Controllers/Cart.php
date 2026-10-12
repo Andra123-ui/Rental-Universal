@@ -71,6 +71,10 @@ class Cart extends BaseController
             return redirect()->back()->with('error', 'Tanggal mulai dan selesai wajib diisi.');
         }
 
+        if (!$branchId) {
+    return redirect()->back()->with('error', 'Silakan pilih cabang terlebih dahulu.');
+}
+
         $cart = session()->get(self::SESSION_KEY) ?? [];
         $key = $catalogItemId . '_' . md5($startAt . $endAt . ($branchId ?? 'any'));
 
@@ -105,7 +109,11 @@ class Cart extends BaseController
 
         session()->set(self::SESSION_KEY, $cart);
 
-        return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
+        if ($this->request->getPost('redirect') === 'checkout') {
+    return redirect()->to('/checkout');
+}
+
+return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
     }
 
     public function update()
