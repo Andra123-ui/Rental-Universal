@@ -35,6 +35,7 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
         'customerAuth' => \App\Filters\CustomerAuthFilter::class,
+        'backofficeAuth' => \App\Filters\BackofficeAuth::class,
     ];
 
     /**

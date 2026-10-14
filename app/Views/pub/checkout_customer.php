@@ -80,9 +80,13 @@ $isLoggedIn = !empty($loggedCustomer);
                         Fulfillment</button>
                 </form>
 
-                <a href="<?= site_url('account/logout') ?>"
-                    style="display:inline-block;margin-top:14px;font-size:0.82rem;color:var(--muted);">Bukan Anda?
-                    Keluar dari akun</a>
+                <form action="<?= site_url('account/logout') ?>?return_url=<?= urlencode('/checkout') ?>" method="post"
+                    style="margin-top:14px;">
+                    <?= csrf_field() ?>
+                    <button type="submit"
+                        style="background:none;border:0;padding:0;font:inherit;font-size:0.82rem;color:var(--muted);cursor:pointer;text-decoration:underline;">Bukan
+                        Anda? Keluar dari akun</button>
+                </form>
 
                 <?php else: ?>
 

@@ -6,19 +6,17 @@ use CodeIgniter\Config\BaseConfig;
 
 class Whatsapp extends BaseConfig
 {
-    /**
-     * Diisi dari .env, contoh:
-     *   whatsapp.gatewayUrl = https://owa.gusaha.id:5570/api/send-message
-     *   whatsapp.apiKey     = 247bd699b4542b8ed04a5971601eb5d0ca78ac10
-     */
     public string $gatewayUrl;
     public string $apiKey;
+    public int $deviceId;
 
     public function __construct()
     {
         parent::__construct();
 
-        $this->gatewayUrl = (string) (env('whatsapp.gatewayUrl') ?? 'https://owa.gusaha.id:5570/api/send-message');
-        $this->apiKey     = (string) (env('whatsapp.apiKey') ?? '');
+        // Prioritas baca dari .env, fallback ke nilai default
+        $this->gatewayUrl = env('whatsapp.gatewayUrl', '');
+        $this->apiKey     = env('whatsapp.apiKey', '');
+        $this->deviceId   = (int) env('whatsapp.deviceId', 0);
     }
 }

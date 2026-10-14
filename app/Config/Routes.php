@@ -132,3 +132,33 @@ $routes->group('account', [
     // CAUTH-04
     $routes->post('logout', 'AuthController::logout');
 });
+
+$routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], static function ($routes) {
+    $routes->get('/', 'AuthController::login');
+    $routes->post('login', 'AuthController::attempt');
+    $routes->post('logout', 'AuthController::logout');
+
+    $routes->get('dashboard', 'DashboardController::index', ['filter' => 'backofficeAuth']);
+
+    // Produk: lihat daftar
+    $routes->get('produk', 'ProdukController::index', ['filter' => 'backofficeAuth:product.view,product.manage']);
+
+    // Produk: tambah / ubah / aktif-nonaktif
+    $routes->group('produk', ['filter' => 'backofficeAuth:product.manage'], static function ($routes) {
+        $routes->get('baru', 'ProdukController::create');
+        $routes->post('simpan', 'ProdukController::store');
+        $routes->get('ubah/(:segment)', 'ProdukController::edit/$1');
+        $routes->post('ubah/(:segment)', 'ProdukController::update/$1');
+        $routes->post('status/(:segment)', 'ProdukController::status/$1');
+    });
+
+    // Jenis
+    $routes->group('jenis', ['filter' => 'backofficeAuth:jenis.manage'], static function ($routes) {
+        $routes->get('/', 'JenisController::index');
+        $routes->get('baru', 'JenisController::create');
+        $routes->post('simpan', 'JenisController::store');
+        $routes->get('ubah/(:segment)', 'JenisController::edit/$1');
+        $routes->post('ubah/(:segment)', 'JenisController::update/$1');
+        $routes->post('status/(:segment)', 'JenisController::status/$1');
+    });
+});

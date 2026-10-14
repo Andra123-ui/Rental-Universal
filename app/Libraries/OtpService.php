@@ -47,23 +47,12 @@ class OtpService
      * NOTE: sesuaikan implementasi curl di bawah dengan provider WA yang dipakai
      * (mis. resmi WhatsApp Business API, atau provider pihak ketiga).
      */
-    /**
-     * Kirim OTP via WhatsApp gateway (server milik sendiri: owa.gusaha.id).
-     * API key & endpoint diambil dari .env (bukan database) karena bersifat
-     * kredensial/secret — lihat app/Config/Whatsapp.php.
-     *
-     * Isi di .env:
-     *   whatsapp.gatewayUrl = https://owa.gusaha.id:5570/api/send-message
-     *   whatsapp.apiKey     = <api_key kamu>
-     */
-    public function sendViaWhatsapp(string $canonicalPhone, string $code): bool
+        public function sendViaWhatsapp(string $canonicalPhone, string $code): bool
     {
-        $config    = config(\Config\Whatsapp::class);
-        $gatewayUrl = $config->gatewayUrl;
-        $apiKey     = $config->apiKey;
+        $config = config(\Config\Whatsapp::class);
 
-        if (empty($apiKey)) {
-            log_message('error', 'OTP WhatsApp: whatsapp.apiKey belum diisi di .env.');
+        if (empty($config->apiKey) || empty($config->gatewayUrl)) {
+            log_message('error', 'OTP WhatsApp: whatsapp.gatewayUrl / whatsapp.apiKey belum diisi di .env.');
             return false;
         }
 
@@ -75,33 +64,50 @@ class OtpService
             . "⚠️ Jangan bagikan kode ini ke siapa pun.\n"
             . 'Rental Universal tidak pernah meminta kode OTP kamu.';
 
-        $body = [
-            'api_key'  => $apiKey,
-            'receiver' => $canonicalPhone,
-            'data'     => ['message' => $message],
+        $payload = [
+            'api_key'   => $config->apiKey,
+            'device_id' => (int) $config->deviceId,
+            'to'        => ltrim($canonicalPhone, '+'),   // +62812... -> 62812...
+            'type'      => 'text',
+            'text'      => $message,
         ];
 
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL            => $gatewayUrl,
+            CURLOPT_URL            => $config->gatewayUrl,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST  => 'POST',
-            CURLOPT_POSTFIELDS     => json_encode($body),
-            CURLOPT_HTTPHEADER     => ['Accept: */*', 'Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => json_encode($payload),
+            CURLOPT_HTTPHEADER     => ['Accept: application/json', 'Content-Type: application/json'],
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT        => 20,
         ]);
 
         $response = curl_exec($ch);
         $error    = curl_error($ch);
+        $status   = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($error || !$response) {
+        if ($error || $response === false) {
             log_message('error', 'Gagal kirim OTP WhatsApp (curl): ' . $error);
             return false;
         }
 
+        // Dicatat dulu supaya kelihatan format respons aslinya saat masa uji
+        log_message('info', "OTP WhatsApp: HTTP {$status} - {$response}");
+
+        if ($status < 200 || $status >= 300) {
+            log_message('error', "Gagal kirim OTP WhatsApp (HTTP {$status}): {$response}");
+            return false;
+        }
+
         $json = json_decode($response, true);
-        if (isset($json['error']) && $json['error']) {
+                if (is_array($json) && (
+            !empty($json['error'])
+            || (array_key_exists('ok', $json) && $json['ok'] === false)
+            || (array_key_exists('success', $json) && $json['success'] === false)
+            || (array_key_exists('status', $json) && $json['status'] === false)
+        )) {    
             log_message('error', 'Gagal kirim OTP WhatsApp (API): ' . $response);
             return false;
         }
