@@ -58,9 +58,9 @@ class OtpService
      */
     public function sendViaWhatsapp(string $canonicalPhone, string $code): bool
     {
-        $config    = config(\Config\Whatsapp::class);
+        $config = config(\Config\Whatsapp::class);
         $gatewayUrl = $config->gatewayUrl;
-        $apiKey     = $config->apiKey;
+        $apiKey = $config->apiKey;
 
         if (empty($apiKey)) {
             log_message('error', 'OTP WhatsApp: whatsapp.apiKey belum diisi di .env.');
@@ -76,23 +76,23 @@ class OtpService
             . 'Rental Universal tidak pernah meminta kode OTP kamu.';
 
         $body = [
-            'api_key'  => $apiKey,
+            'api_key' => $apiKey,
             'receiver' => $canonicalPhone,
-            'data'     => ['message' => $message],
+            'data' => ['message' => $message],
         ];
 
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL            => $gatewayUrl,
+            CURLOPT_URL => $gatewayUrl,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CUSTOMREQUEST  => 'POST',
-            CURLOPT_POSTFIELDS     => json_encode($body),
-            CURLOPT_HTTPHEADER     => ['Accept: */*', 'Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => json_encode($body),
+            CURLOPT_HTTPHEADER => ['Accept: */*', 'Content-Type: application/json'],
+            CURLOPT_TIMEOUT => 30,
         ]);
 
         $response = curl_exec($ch);
-        $error    = curl_error($ch);
+        $error = curl_error($ch);
         curl_close($ch);
 
         if ($error || !$response) {

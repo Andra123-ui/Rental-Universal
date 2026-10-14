@@ -19,6 +19,6 @@ class Whatsapp extends BaseConfig
         parent::__construct();
 
         $this->gatewayUrl = (string) (env('whatsapp.gatewayUrl') ?? 'https://owa.gusaha.id:5570/api/send-message');
-        $this->apiKey     = (string) (env('whatsapp.apiKey') ?? '');
+        $this->apiKey = (string) (env('whatsapp.apiKey') ?? '');
     }
 }
