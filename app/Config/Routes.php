@@ -125,9 +125,14 @@ $routes->group('account', [
     // ===================================================== // CUSTOMER PROFILE // ===================================================== 
     $routes->get('profile', 'ProfileController::index', [ 'filter' => 'customerAuth' ]); 
     $routes->post('profile/update', 'ProfileController::update', [ 'filter' => 'customerAuth' ]); 
+    
     // Ganti nomor WhatsApp 
     $routes->post('profile/phone/send-otp', 'ProfileController::sendPhoneOtp', [ 'filter' => 'customerAuth' ]); 
     $routes->post('profile/phone/verify', 'ProfileController::verifyPhoneOtp', [ 'filter' => 'customerAuth' ]);
+    
+    // File dan Foto
+    $routes->get('profile/identity-file', 'ProfileController::identityFile', ['filter' => 'customerAuth']);
+    $routes->get('profile/photo', 'ProfileController::profilePhoto', ['filter' => 'customerAuth']); // <--- ROUTE FOTO BARU
 
     // CAUTH-04
     $routes->post('logout', 'AuthController::logout');
@@ -160,5 +165,14 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
         $routes->get('ubah/(:segment)', 'JenisController::edit/$1');
         $routes->post('ubah/(:segment)', 'JenisController::update/$1');
         $routes->post('status/(:segment)', 'JenisController::status/$1');
+    });
+
+    // Verifikasi identitas customer
+    $routes->group('verifikasi-identitas', ['filter' => 'backofficeAuth:customer.verify'], static function ($routes) {
+        $routes->get('/', 'CustomerVerification::index');
+        $routes->get('(:segment)', 'CustomerVerification::show/$1');
+        $routes->get('(:segment)/file', 'CustomerVerification::file/$1');
+        $routes->post('(:segment)/approve', 'CustomerVerification::approve/$1');
+        $routes->post('(:segment)/reject', 'CustomerVerification::reject/$1');
     });
 });

@@ -372,6 +372,10 @@
         <?php if (admin_can('jenis.manage')): ?>
         <a href="<?= site_url('backoffice/jenis') ?>" class="<?= $nav === 'jenis' ? 'active' : '' ?>">Jenis</a>
         <?php endif; ?>
+        <?php if (admin_can('customer.verify')): ?>
+        <a href="<?= site_url('backoffice/verifikasi-identitas') ?>"
+            class="<?= $nav === 'verifikasi' ? 'active' : '' ?>">Verifikasi Identitas</a>
+        <?php endif; ?>
         <div class="spacer"></div>
         <div class="who"><?= esc(session()->get('admin_name')) ?> · <?= esc(session()->get('admin_role')) ?></div>
         <form action="<?= site_url('backoffice/logout') ?>" method="post">
