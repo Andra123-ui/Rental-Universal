@@ -87,6 +87,11 @@ class AuthController extends BaseController
                 ->with('errors', ['phone' => 'Format nomor HP tidak valid.']);
         }
 
+        // Bypass OTP sementara (WA sedang error). Aktif hanya bila otp.bypass=true & bukan production.
+        if ($this->isOtpBypassEnabled()) {
+            return $this->loginWithoutOtp($phone, $ip, $userAgent);
+        }
+
         // --- Rate limit per phone + IP ---
         if ($this->isRateLimited($phone, $ip)) {
             return redirect()->back()->withInput()
@@ -458,7 +463,7 @@ class AuthController extends BaseController
         return redirect()->to(site_url('/'));
     }
 
-        /**
+    /**
      * GET /account/onboarding
      * Lengkapi data profil setelah login OTP pertama — CAUTH-03.
      */
@@ -585,6 +590,80 @@ class AuthController extends BaseController
         $account = $this->accountModel->find($accountId);
 
         return ($customer && $account) ? [$customer, $account] : null;
+    }
+
+    /**
+     * Saklar bypass OTP. Dipaksa mati di production.
+     */
+    protected function isOtpBypassEnabled(): bool
+    {
+        return ENVIRONMENT !== 'production'
+            && filter_var(env('otp.bypass', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Login langsung tanpa OTP: buat/ambil customer + account, bentuk session
+     * persis seperti verifyOtp(), lalu lanjut ke onboarding atau return_url.
+     */
+    protected function loginWithoutOtp(string $phone, string $ip, string $userAgent)
+    {
+        $account = $this->accountModel->findByLoginPhone($phone);
+
+        if ($account === null) {
+            $customerId = $this->customerModel->insert([
+                'name' => $phone,
+                'phone' => $phone,
+            ], true);
+
+            $accountId = $this->accountModel->insert([
+                'customer_id' => $customerId,
+                'login_phone' => $phone,
+                'status' => CustomerAccountModel::STATUS_PENDING,
+            ], true);
+
+            $account = $this->accountModel->find($accountId);
+        }
+
+        // Akun suspended tetap ditolak, sama seperti alur OTP biasa
+        if ($this->accountModel->isSuspended($account)) {
+            return redirect()->back()->withInput()
+                ->with('errors', ['phone' => 'Akun Anda sedang tidak dapat digunakan. Hubungi bantuan pelanggan.']);
+        }
+
+        $accountId = (int) $account['id'];
+
+        $this->accountModel->update($accountId, [
+            'phone_verified_at' => date('Y-m-d H:i:s'),
+            'status' => CustomerAccountModel::STATUS_ACTIVE,
+            'last_login_at' => date('Y-m-d H:i:s'),
+            'last_login_ip' => $ip,
+            'failed_attempts' => 0,
+        ]);
+
+        session()->regenerate(true);
+
+        session()->set([
+            'customer_logged_in' => true,
+            'customer_id' => $account['customer_id'],
+            'customer_account_id' => $accountId,
+        ]);
+        session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
+
+        $this->activityLogModel->record(
+            ActivityLogModel::EVENT_LOGIN_SUCCESS,
+            $accountId,
+            $ip,
+            $userAgent,
+            'Login tanpa OTP (bypass sementara)'
+        );
+
+        // Akun baru tetap lewat onboarding dulu, return_url masih tersimpan di session
+        $freshAccount = $this->accountModel->find($accountId);
+        if (empty($freshAccount['onboarded_at'])) {
+            return redirect()->to(site_url('account/onboarding'));
+        }
+
+        return $this->redirectAfterLogin();
     }
 
     /**

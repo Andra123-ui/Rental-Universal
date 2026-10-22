@@ -5,7 +5,6 @@
  * @var float $depositTotal
  * @var float $grandTotal
  * @var array $customer
- * @var array $fulfillment
  */
 $fulfillmentLabels = [
   'SELF_PICKUP' => 'Ambil Sendiri',
@@ -49,14 +48,9 @@ $fulfillmentLabels = [
                     <div class="summary-row"><span>No. HP</span><span>
                             <?= esc($customer['phone']) ?>
                         </span></div>
-                    <div class="summary-row"><span>Email</span><span>
+                    <div class="summary-row" style="border-bottom:none;"><span>Email</span><span>
                             <?= esc($customer['email'] ?: '-') ?>
                         </span></div>
-                    <div class="summary-row" style="border-bottom:none;">
-                        <span>Fulfillment</span><span>
-                            <?= esc($fulfillmentLabels[$fulfillment['fulfillment_method']] ?? $fulfillment['fulfillment_method']) ?>
-                        </span>
-                    </div>
                 </div>
 
                 <h3 style="font-size:1.05rem;margin-bottom:14px;">Item Booking</h3>
@@ -65,6 +59,7 @@ $fulfillmentLabels = [
                         <tr>
                             <th>Item</th>
                             <th>Jadwal</th>
+                            <th>Fulfillment</th>
                             <th>Qty</th>
                             <th>Subtotal</th>
                         </tr>
@@ -97,6 +92,19 @@ $fulfillmentLabels = [
                                 <?= esc(date('d M Y H:i', strtotime($line['start_at']))) ?> s/d
                                 <?= esc(date('d M Y H:i', strtotime($line['end_at']))) ?>
                             </td>
+                            <td style="font-size:0.85rem;color:var(--muted);">
+                                <?php
+                                $fm = $line['fulfillment']['fulfillment_method'] ?? '-';
+                                echo esc($fulfillmentLabels[$fm] ?? $fm);
+
+                                if (!empty($line['fulfillment']['pickup_address'])) {
+                                    echo '<br><small>Pickup: ' . esc($line['fulfillment']['pickup_address']) . '</small>';
+                                }
+                                if (!empty($line['fulfillment']['return_address'])) {
+                                    echo '<br><small>Return: ' . esc($line['fulfillment']['return_address']) . '</small>';
+                                }
+                                ?>
+                            </td>
                             <td>
                                 <?= esc($line['qty']) ?>
                             </td>
@@ -126,8 +134,7 @@ $fulfillmentLabels = [
                 <?php if ($depositTotal > 0): ?>
                 <p style="font-size:0.78rem;color:var(--muted);margin-top:10px;">
                     *Deposit bersifat refundable dan akan dikembalikan sesuai syarat & ketentuan setelah barang
-                    dikembalikan dalam
-                    kondisi baik.
+                    dikembalikan dalam kondisi baik.
                 </p>
                 <?php endif; ?>
 
