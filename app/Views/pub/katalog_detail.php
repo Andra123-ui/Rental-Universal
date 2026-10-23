@@ -89,6 +89,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                         <?php foreach ($itemBranches as $b): ?>
                         <div class="branch-info-item">
                             <strong><?= esc($b['name']) ?></strong>
+                            <div class="bi-row"><span>Stok</span> <?= (int) $b['total_unit'] ?> unit tersedia</div>
                             <?php if (!empty($b['address'])): ?>
                             <div class="bi-row"><span>Alamat</span> <?= esc($b['address']) ?></div>
                             <?php endif; ?>
@@ -106,7 +107,6 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             </div>
 
             <!-- Booking card: kalender ketersediaan + tambah ke keranjang -->
-            <!-- Booking card: kalender ketersediaan + tambah ke keranjang -->
             <div class="booking-card">
                 <h3>Cek Ketersediaan</h3>
                 <?php if (!empty($itemBranches)): ?>
@@ -115,7 +115,9 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <select id="branch-select" class="branch-select" required>
                         <option value="" disabled selected>-- Pilih cabang dulu --</option>
                         <?php foreach ($itemBranches as $b): ?>
-                        <option value="<?= (int) $b['id'] ?>"><?= esc($b['name']) ?></option>
+                        <option value="<?= (int) $b['id'] ?>">
+                            <?= esc($b['name']) ?> (<?= (int) $b['total_unit'] ?> unit tersedia)
+                        </option>
                         <?php endforeach; ?>
                     </select>
                     <div id="branch-note" class="branch-note"></div>
@@ -513,7 +515,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         if (PRICING_UNIT === 'SESSION') return 1;
         const start = new Date(startKey + 'T00:00:00');
         const end = new Date(endKey + 'T00:00:00');
-        return Math.round((end - start) / 86400000) + 1; // inklusif tanggal mulai & selesai
+        return Math.round((end - start) / 86400000) + 1;
     }
 
     const today = new Date();
@@ -531,7 +533,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         viewMonth = minMonth;
     let selStart = null,
         selEnd = null;
-    let selBranch = ''; // '' = semua cabang, selain itu id cabang (string)
+    let selBranch = '';
 
     const dowEl = document.getElementById('cal-dow');
     dowNames.forEach(n => {
@@ -552,7 +554,6 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         return BRANCHES.length > 0 && !selBranch;
     }
 
-    // Data ketersediaan per tanggal, sudah menyesuaikan cabang yang dipilih
     function getInfo(dateKey) {
         const info = CALENDAR_DATA[dateKey];
         if (!info) return null;
@@ -820,7 +821,6 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
         branchSelect.addEventListener('change', () => {
             selBranch = branchSelect.value;
             if (branchInput) branchInput.value = selBranch;
-            // reset pilihan tanggal karena stok tiap cabang berbeda
             selStart = null;
             selEnd = null;
             document.getElementById('input_start_at').value = '';

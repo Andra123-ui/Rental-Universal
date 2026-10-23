@@ -118,6 +118,57 @@ $deposit = old('deposit_amount', isset($item['deposit_amount']) ? (int) $item['d
                 <textarea id="description" name="description" rows="5"
                     maxlength="5000"><?= esc((string) old('description', $item['description'] ?? '')) ?></textarea>
             </div>
+
+            <!-- SECTION CABANG & UNIT -->
+            <div class="full" style="margin-top: 20px;">
+                <hr style="border:0; border-top:1px solid #E3E8F2; margin:20px 0;">
+                <h3 style="margin:0 0 10px; font-size:1rem; color:#1B3A8C;">Distribusi Cabang & Unit</h3>
+                <p style="margin:0 0 15px; font-size:.85rem; color:#64748b;">
+                    Tentukan di cabang mana produk ini tersedia dan berapa jumlah unitnya. (Kosongkan jika belum ada).
+                </p>
+
+                <div id="branch-units-container">
+                    <?php 
+                    if (!empty($selectedBranches)): 
+                        foreach ($selectedBranches as $sb): 
+                    ?>
+                    <div class="branch-row" style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+                        <select name="branches[]" style="flex:1;" class="form-control">
+                            <option value="">-- Pilih Cabang --</option>
+                            <?php foreach ($branches as $b): ?>
+                            <option value="<?= $b['id'] ?>" <?= ($sb['branch_id'] == $b['id']) ? 'selected' : '' ?>>
+                                <?= esc($b['branch_name']) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="number" name="units[]" min="1" placeholder="Jumlah Unit" class="form-control"
+                            style="flex:1;" value="<?= esc($sb['total_unit']) ?>">
+                        <button type="button" class="btn btn-ghost btn-sm remove-row"
+                            style="color:#b91c1c;">Hapus</button>
+                    </div>
+                    <?php 
+                        endforeach;
+                    else: 
+                    ?>
+                    <div class="branch-row" style="display:flex; gap:10px; margin-bottom:10px; align-items:center;">
+                        <select name="branches[]" style="flex:1;" class="form-control">
+                            <option value="">-- Pilih Cabang --</option>
+                            <?php if(!empty($branches)): foreach ($branches as $b): ?>
+                            <option value="<?= $b['id'] ?>"><?= esc($b['branch_name']) ?></option>
+                            <?php endforeach; endif; ?>
+                        </select>
+                        <input type="number" name="units[]" min="1" placeholder="Jumlah Unit" class="form-control"
+                            style="flex:1;">
+                        <button type="button" class="btn btn-ghost btn-sm remove-row"
+                            style="color:#b91c1c;">Hapus</button>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <button type="button" class="btn btn-ghost btn-sm" id="add-branch-row" style="margin-top: 5px;">+ Tambah
+                    Cabang Lain</button>
+            </div>
+
         </div>
 
         <div class="actions">
@@ -134,7 +185,6 @@ $deposit = old('deposit_amount', isset($item['deposit_amount']) ? (int) $item['d
     const depReq = document.getElementById('deposit_required');
     const depAmt = document.getElementById('deposit_amount');
 
-    // Jenis hanya yang milik kategori terpilih
     function syncJenis(reset) {
         Array.from(jenis.options).forEach(function(o) {
             if (!o.value) return;
@@ -147,7 +197,6 @@ $deposit = old('deposit_amount', isset($item['deposit_amount']) ? (int) $item['d
         jenis.disabled = kat.value === '';
     }
 
-    // Nominal deposit hanya aktif kalau deposit "Ada"
     function syncDeposit() {
         depAmt.disabled = depReq.value !== '1';
         if (depAmt.disabled) depAmt.value = '';
@@ -159,6 +208,32 @@ $deposit = old('deposit_amount', isset($item['deposit_amount']) ? (int) $item['d
     depReq.addEventListener('change', syncDeposit);
     syncJenis(false);
     syncDeposit();
+
+    var container = document.getElementById('branch-units-container');
+    var addBtn = document.getElementById('add-branch-row');
+
+    addBtn.addEventListener('click', function() {
+        var row = document.createElement('div');
+        row.className = 'branch-row';
+        row.style.cssText = 'display:flex; gap:10px; margin-bottom:10px; align-items:center;';
+
+        var optionsHtml = container.querySelector('select').innerHTML;
+
+        row.innerHTML = `
+            <select name="branches[]" style="flex:1;" class="form-control">
+                ${optionsHtml}
+            </select>
+            <input type="number" name="units[]" min="1" placeholder="Jumlah Unit" class="form-control" style="flex:1;">
+            <button type="button" class="btn btn-ghost btn-sm remove-row" style="color:#b91c1c;">Hapus</button>
+        `;
+        container.appendChild(row);
+    });
+
+    container.addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('remove-row')) {
+            e.target.closest('.branch-row').remove();
+        }
+    });
 })();
 </script>
 

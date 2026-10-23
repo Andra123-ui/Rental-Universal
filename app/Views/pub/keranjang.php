@@ -68,7 +68,7 @@ helper('business');
 
                                 <?php
                                 $bizName = business_name($line['product']['business_id'] ?? null);
-                                $brName  = branch_name(isset($line['branch_id']) ? (int) $line['branch_id'] : null);
+                                $brName = $line['branch_name'] ?? branch_name(isset($line['branch_id']) ? (int) $line['branch_id'] : null);
                                 $desc    = trim((string) ($line['product']['description'] ?? ''));
                                 ?>
                                 <div class="cart-meta">

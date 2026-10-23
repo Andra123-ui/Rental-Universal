@@ -9,7 +9,6 @@ class ProdukController extends BaseController
 {
     protected $helpers = ['idhash'];
 
-    // Nilai dari data yang sudah ada. Kalau ada nilai lain di sistemmu, tambahkan di sini.
     private const ITEM_TYPES    = ['ITEM' => 'Barang', 'SERVICE' => 'Jasa', 'PACKAGE' => 'Paket'];
     private const RENTAL_MODES  = [
         'SERIALIZED' => 'Per unit (tiap unit punya identitas, mis. mobil)',
@@ -49,7 +48,8 @@ class ProdukController extends BaseController
         $rows = $base
             ->select('i.id, i.sku, i.name, i.item_type, i.base_price, i.unit_label, i.status,
                       c.name AS category_name, j.name AS jenis_name,
-                      (SELECT COUNT(*) FROM resources r WHERE r.catalog_item_id = i.id AND r.deleted_at IS NULL) AS resource_count', false)
+                      (SELECT COUNT(*) FROM resources r WHERE r.catalog_item_id = i.id AND r.deleted_at IS NULL) AS resource_count,
+                      (SELECT GROUP_CONCAT(b.branch_name SEPARATOR ", ") FROM resources r2 JOIN branches b ON b.id = r2.branch_id WHERE r2.catalog_item_id = i.id AND r2.deleted_at IS NULL) AS branch_names', false)
             ->orderBy('i.created_at', 'DESC')
             ->limit($perPage, ($page - 1) * $perPage)
             ->get()->getResultArray();
@@ -103,6 +103,21 @@ class ProdukController extends BaseController
     {
         $db = db_connect();
 
+        $branches = $db->table('branches')
+            ->where('is_active', 1)
+            ->orderBy('branch_name')
+            ->get()->getResultArray();
+
+        $selectedBranches = [];
+        if ($item) {
+            $selectedBranches = $db->table('resources')
+                ->select('branch_id, COUNT(id) as total_unit')
+                ->where('catalog_item_id', $item['id'])
+                ->where('deleted_at', null)
+                ->groupBy('branch_id')
+                ->get()->getResultArray();
+        }
+
         return view('backoffice/produk/form', [
             'title'       => $item ? 'Ubah Produk' : 'Tambah Produk',
             'nav'         => 'produk',
@@ -112,6 +127,8 @@ class ProdukController extends BaseController
             'itemTypes'   => self::ITEM_TYPES,
             'rentalModes' => self::RENTAL_MODES,
             'pricingUnits' => self::PRICING_UNITS,
+            'branches'    => $branches,
+            'selectedBranches' => $selectedBranches,
         ]);
     }
 
@@ -180,16 +197,62 @@ class ProdukController extends BaseController
             'status'           => $this->request->getPost('status'),
         ];
 
+        $branchesPost = $this->request->getPost('branches') ?? [];
+        $unitsPost    = $this->request->getPost('units') ?? [];
+
+        $db->transStart();
+
         if ($item) {
             $db->table('catalog_items')->where('id', $item['id'])->update($data);
-            return redirect()->to(site_url('backoffice/produk'))->with('success', 'Produk diperbarui.');
+            $productId = $item['id'];
+        } else {
+            $data['business_id'] = $this->businessId();
+            $db->table('catalog_items')->insert($data);
+            $productId = $db->insertID();
         }
 
-        $data['business_id'] = $this->businessId();
-        $db->table('catalog_items')->insert($data);
+        // Hapus resource lama
+        $db->table('resources')->where('catalog_item_id', $productId)->delete();
 
-        return redirect()->to(site_url('backoffice/produk'))
-            ->with('success', 'Produk ditambahkan. Produk baru belum punya unit/stok, jadi belum bisa dipesan sampai unitnya didaftarkan.');
+        // Insert resource baru
+        if (!empty($branchesPost) && is_array($branchesPost)) {
+            $resourceType = 'EQUIPMENT';
+            if ($data['item_type'] === 'SERVICE') $resourceType = 'STAFF';
+            if ($data['item_type'] === 'PACKAGE') $resourceType = 'PROPERTY';
+
+            foreach ($branchesPost as $index => $branchId) {
+                $branchId = (int) $branchId;
+                $unitCount = (int) ($unitsPost[$index] ?? 0);
+
+                if ($branchId > 0 && $unitCount > 0) {
+                    for ($i = 1; $i <= $unitCount; $i++) {
+                        $codePrefix = $sku ?: strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $data['name']), 0, 3));
+                        $resCode = $codePrefix . '-' . $branchId . '-' . $i;
+                        
+                        $db->table('resources')->insert([
+                            'catalog_item_id' => $productId,
+                            'branch_id'       => $branchId,
+                            'resource_code'   => $resCode,
+                            'resource_name'   => $data['name'] . ' - ' . $resCode,
+                            'resource_type'   => $resourceType,
+                            'capacity'        => 1, // <--- SELALU ISI 1
+                            'status'          => 'AVAILABLE',
+                            'created_at'      => date('Y-m-d H:i:s'),
+                            'updated_at'      => date('Y-m-d H:i:s'),
+                        ]);
+                    }
+                }
+            }
+        }
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return $back->with('error', 'Gagal menyimpan produk dan unit.');
+        }
+
+        $msg = $item ? 'Produk diperbarui.' : 'Produk ditambahkan.';
+        return redirect()->to(site_url('backoffice/produk'))->with('success', $msg);
     }
 
     private function find(string $hash): array

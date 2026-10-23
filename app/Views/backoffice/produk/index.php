@@ -35,7 +35,8 @@ $query = fn(int $p) => http_build_query(array_filter(['q' => $q, 'status' => $st
                     <th>Produk</th>
                     <th>Kategori / Jenis</th>
                     <th>Harga</th>
-                    <th>Unit</th>
+                    <th>Cabang</th>
+                    <th>Total Unit</th>
                     <th>Status</th>
                     <th></th>
                 </tr>
@@ -43,7 +44,7 @@ $query = fn(int $p) => http_build_query(array_filter(['q' => $q, 'status' => $st
             <tbody>
                 <?php if (empty($rows)): ?>
                 <tr>
-                    <td colspan="6" class="muted">Tidak ada produk.</td>
+                    <td colspan="7" class="muted">Tidak ada produk.</td>
                 </tr>
                 <?php endif; ?>
                 <?php foreach ($rows as $r): $h = id_encode($r['id']); ?>
@@ -58,11 +59,23 @@ $query = fn(int $p) => http_build_query(array_filter(['q' => $q, 'status' => $st
                     </td>
                     <td>Rp <?= number_format($r['base_price'], 0, ',', '.') ?> <span class="muted">/
                             <?= esc($r['unit_label']) ?></span></td>
+
+                    <!-- MENAMPILKAN CABANG -->
+                    <td>
+                        <?php 
+                        if (!empty($r['branch_names'])) {
+                            echo esc($r['branch_names']);
+                        } else {
+                            echo '<span class="muted">-</span>';
+                        }
+                        ?>
+                    </td>
+
                     <td>
                         <?php if ((int) $r['resource_count'] === 0): ?>
                         <span class="badge badge-warn">Belum ada unit</span>
                         <?php else: ?>
-                        <?= (int) $r['resource_count'] ?>
+                        <?= (int) $r['resource_count'] ?> unit
                         <?php endif; ?>
                     </td>
                     <td>

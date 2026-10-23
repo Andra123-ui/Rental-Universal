@@ -39,6 +39,8 @@ class Cart extends BaseController
                 'product' => $product,
                 'qty' => $line['qty'],
                 'branch_id' => $line['branch_id'] ?? null,
+                'branch_name' => $line['branch_name'] ?? null,
+                'branch_address' => $line['branch_address'] ?? null,
                 'start_at' => $line['start_at'],
                 'end_at' => $line['end_at'],
                 'line_total' => $lineTotal,
@@ -72,18 +74,25 @@ class Cart extends BaseController
         }
 
         if (!$branchId) {
-    return redirect()->back()->with('error', 'Silakan pilih cabang terlebih dahulu.');
-}
+            return redirect()->back()->with('error', 'Silakan pilih cabang terlebih dahulu.');
+        }
+
+        // Ambil data cabang dari database
+        $branch = db_connect()->table('branches')
+            ->select('branch_name, address, phone')
+            ->where('id', $branchId)
+            ->get(1)->getRowArray();
+
+        if (!$branch) {
+            return redirect()->back()->with('error', 'Cabang tidak ditemukan.');
+        }
 
         $cart = session()->get(self::SESSION_KEY) ?? [];
-        $key = $catalogItemId . '_' . md5($startAt . $endAt . ($branchId ?? 'any'));
+        $key = $catalogItemId . '_' . md5($startAt . $endAt . $branchId);
 
-        // Qty yang SUDAH ada di keranjang untuk item + jadwal yang sama
-        // (biar tidak lolos kalau user tambah bertahap: 1 lalu 1 lagi, dst)
         $existingQtyInCart = isset($cart[$key]) ? (int) $cart[$key]['qty'] : 0;
         $requestedTotalQty = $existingQtyInCart + $qty;
 
-        // Validasi ketersediaan REAL terhadap resource/kapasitas/blackout/maintenance
         $availabilityModel = new AvailabilityModel();
         $check = $availabilityModel->checkAvailability($catalogItemId, $branchId, $startAt, $endAt, $requestedTotalQty);
 
@@ -99,9 +108,13 @@ class Cart extends BaseController
             );
         }
 
+        // Simpan data cabang ke session
         $cart[$key] = [
             'catalog_item_id' => $catalogItemId,
             'branch_id' => $branchId,
+            'branch_name' => $branch['branch_name'],
+            'branch_address' => $branch['address'],
+            'branch_phone' => $branch['phone'],
             'start_at' => $startAt,
             'end_at' => $endAt,
             'qty' => $requestedTotalQty,
@@ -110,10 +123,10 @@ class Cart extends BaseController
         session()->set(self::SESSION_KEY, $cart);
 
         if ($this->request->getPost('redirect') === 'checkout') {
-    return redirect()->to('/checkout');
-}
+            return redirect()->to('/checkout');
+        }
 
-return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
+        return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke keranjang.');
     }
 
     public function update()
@@ -123,8 +136,6 @@ return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke ke
 
         $cart = session()->get(self::SESSION_KEY) ?? [];
 
-        // Token CSRF baru untuk dikirim balik ke client (dipakai request AJAX berikutnya,
-        // karena CI4 meregenerasi token setiap request POST -> token lama jadi basi)
         $csrfPayload = [
             'csrf_token_name' => csrf_token(),
             'csrf_hash' => csrf_hash(),
@@ -142,7 +153,6 @@ return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke ke
 
         $line = $cart[$key];
 
-        // Validasi ulang ketersediaan sebelum qty benar-benar diubah
         $availabilityModel = new AvailabilityModel();
         $check = $availabilityModel->checkAvailability(
             (int) $line['catalog_item_id'],
@@ -215,4 +225,4 @@ return redirect()->to('/cart')->with('success', 'Item berhasil ditambahkan ke ke
 
         return redirect()->to('/cart')->with('success', 'Item dihapus dari keranjang.');
     }
-} 
+}

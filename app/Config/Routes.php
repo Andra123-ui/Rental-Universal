@@ -175,4 +175,6 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
         $routes->post('(:segment)/approve', 'CustomerVerification::approve/$1');
         $routes->post('(:segment)/reject', 'CustomerVerification::reject/$1');
     });
+
+    $routes->get('customer-photo/(:num)', 'CustomerVerification::profilePhoto/$1', ['filter' => 'backofficeAuth:customer.verify']);
 });

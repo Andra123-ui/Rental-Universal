@@ -81,8 +81,8 @@ class Checkout extends BaseController
     /**
      * PUB-08: Metode Pemenuhan & Lokasi (Per Item)
      */
-    public function fulfillment()
-    {
+        public function fulfillment()
+    { 
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
         if (empty($checkoutData['customer'])) {
             return redirect()->to('/checkout')->with('error', 'Lengkapi data penyewa terlebih dahulu.');
@@ -102,7 +102,6 @@ class Checkout extends BaseController
         foreach ($cart as $key => $line) {
             $product = $catalogModel->find($line['catalog_item_id']);
             if ($product) {
-                // Hitung harga per item
                 $price = $availabilityModel->estimatePrice(
                     $product,
                     $line['branch_id'] ?? null,
@@ -122,7 +121,12 @@ class Checkout extends BaseController
                     'qty' => $line['qty'],
                     'start_at' => $line['start_at'],
                     'end_at' => $line['end_at'],
-                    'line_total' => $lineTotal, // Kirim nominal harga
+                    'line_total' => $lineTotal,
+                    
+                    // DATA DARI SESSION KERANJANG
+                    'branch_name' => $line['branch_name'] ?? null,
+                    'branch_address' => $line['branch_address'] ?? null,
+                    'branch_phone' => $line['branch_phone'] ?? null,
                 ];
             }
         }
@@ -130,9 +134,10 @@ class Checkout extends BaseController
         return view('pub/checkout_fulfillment', [
             'cartItems' => $cartItems,
             'subtotal' => $subtotal,
-            'grandTotal' => $subtotal // Asumsi belum ada deposit di tahap ini
+            'grandTotal' => $subtotal
         ]);
     }
+
     public function simpanFulfillment()
     {
         $items = $this->request->getPost('items');
@@ -150,7 +155,7 @@ class Checkout extends BaseController
 
         $fulfillmentData = [];
         foreach ($items as $index => $item) {
-            $fulfillmentData[$index] = [
+            $fulfillmentData[$item['cart_key']] = [
                 'cart_key' => $item['cart_key'] ?? $index,
                 'catalog_item_id' => $item['catalog_item_id'],
                 'fulfillment_method' => $item['fulfillment_method'],
@@ -174,7 +179,6 @@ class Checkout extends BaseController
     {
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
 
-        // Validasi: Cek apakah data fulfillment_items sudah ada
         if (empty($checkoutData['fulfillment_items'])) {
             return redirect()->to('/checkout/fulfillment')->with('error', 'Lengkapi metode pemenuhan terlebih dahulu.');
         }
@@ -208,7 +212,6 @@ class Checkout extends BaseController
             $subtotal += $lineTotal;
             $depositTotal += ($product['deposit_required'] ? $product['deposit_amount'] * $line['qty'] : 0);
 
-            // Ambil data fulfillment spesifik untuk item ini
             $itemFulfillment = $checkoutData['fulfillment_items'][$key] ?? [
                 'fulfillment_method' => 'SELF_PICKUP',
                 'pickup_address' => null,
@@ -223,8 +226,9 @@ class Checkout extends BaseController
                 'end_at' => $line['end_at'],
                 'line_total' => $lineTotal,
                 'business_name' => business_name($product['business_id'] ?? null),
-                'branch_name' => branch_name($branchId),
-                'fulfillment' => $itemFulfillment, // Kirim data fulfillment per item ke view
+                'branch_name' => $line['branch_name'] ?? branch_name($branchId),
+                'branch_address' => $line['branch_address'] ?? null,
+                'fulfillment' => $itemFulfillment,
             ];
         }
 
@@ -236,13 +240,11 @@ class Checkout extends BaseController
             'depositTotal' => $depositTotal,
             'grandTotal' => $grandTotal,
             'customer' => $checkoutData['customer'],
-            // Tidak ada lagi 'fulfillment' global, karena sudah per item
         ]);
     }
 
     /**
      * Proses final: buat bookings + booking_items + allocations dalam 1 transaction.
-     * -> PUB-10 Booking Berhasil
      */
     public function proses()
     {
@@ -301,7 +303,7 @@ class Checkout extends BaseController
             $depositTotal = 0;
             $cartLines = [];
 
-            foreach ($cart as $line) {
+            foreach ($cart as $key => $line) {
                 $product = $catalogModel->find($line['catalog_item_id']);
                 if (!$product) {
                     continue;
@@ -344,7 +346,7 @@ class Checkout extends BaseController
                     'line' => $line,
                     'line_total' => $lineTotal,
                     'price' => $price,
-                    'key' => $line['key'] ?? null // Simpan key untuk lookup fulfillment
+                    'key' => $key
                 ];
             }
 
@@ -355,8 +357,6 @@ class Checkout extends BaseController
             $grandTotal = $subtotal + $depositTotal;
             $invoiceNo = $this->generateInvoiceNo();
 
-            // Untuk tabel bookings, kita isi dengan metode dari item pertama sebagai fallback
-            // (karena bookings hanya bisa menampung 1 metode global)
             $firstFulfillment = $checkoutData['fulfillment_items'][array_key_first($checkoutData['fulfillment_items'])] ?? null;
 
             $bookingId = $bookingModel->insert([
@@ -369,7 +369,6 @@ class Checkout extends BaseController
                 'customer_name_snapshot' => $custData['name'],
                 'customer_phone_snapshot' => $custData['phone'],
                 'customer_email_snapshot' => $custData['email'] ?? null,
-                // Fallback global (opsional, karena data asli ada di booking_items)
                 'fulfillment_method' => $firstFulfillment['fulfillment_method'] ?? 'SELF_PICKUP',
                 'pickup_address' => $firstFulfillment['pickup_address'] ?? null,
                 'return_address' => $firstFulfillment['return_address'] ?? null,
@@ -387,20 +386,17 @@ class Checkout extends BaseController
                 'expires_at' => date('Y-m-d H:i:s', strtotime('+' . self::PAYMENT_WINDOW_MINUTES . ' minutes')),
             ]);
 
-            // ====== LOOPING PER ITEM (FULFILLMENT + ALLOCATION) ======
             foreach ($cartLines as $cl) {
                 $product = $cl['product'];
                 $line = $cl['line'];
                 $cartKey = $cl['key'];
 
-                // Ambil data fulfillment spesifik untuk item ini
                 $itemFulfillment = $checkoutData['fulfillment_items'][$cartKey] ?? [
                     'fulfillment_method' => 'SELF_PICKUP',
                     'pickup_address' => null,
                     'return_address' => null,
                 ];
 
-                // Insert booking_items dengan data fulfillment per item
                 $bookingItemId = $bookingItemModel->insert([
                     'booking_id' => $bookingId,
                     'catalog_item_id' => $product['id'],
@@ -414,13 +410,11 @@ class Checkout extends BaseController
                     'unit_price' => $product['base_price'],
                     'subtotal' => $cl['line_total'],
                     'status' => 'RESERVED',
-                    // DATA FULFILLMENT PER ITEM:
                     'fulfillment_method' => $itemFulfillment['fulfillment_method'],
                     'pickup_address' => $itemFulfillment['pickup_address'],
                     'return_address' => $itemFulfillment['return_address'],
                 ]);
 
-                // Alokasi resource untuk item ini
                 $plan = $availabilityModel->allocateResources(
                     (int) $product['id'],
                     $line['branch_id'] ?? null,
@@ -444,9 +438,7 @@ class Checkout extends BaseController
                     ]);
                 }
             }
-            // ====== END LOOPING ======
 
-            // Isi bookings.branch_id dari cabang resource yang benar-benar teralokasi
             $branchRows = $db->query(
                 'SELECT DISTINCT r.branch_id
                    FROM booking_items bi
@@ -480,9 +472,6 @@ class Checkout extends BaseController
         }
     }
 
-    /**
-     * PUB-10: Booking Berhasil
-     */
     public function berhasil(string $invoiceNo)
     {
         (new \App\Models\AvailabilityModel())->expireStaleBookings();

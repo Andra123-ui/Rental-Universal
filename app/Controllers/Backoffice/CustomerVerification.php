@@ -146,6 +146,30 @@ class CustomerVerification extends BaseController
         return redirect()->to(base_url('backoffice/verifikasi-identitas'))->with('success', 'Dokumen ' . $customer['name'] . ' ditolak.');
     }
 
+        /**
+     * Tampilkan foto profil customer (khusus admin backoffice)
+     */
+    public function profilePhoto(int $customerId)
+    {
+        if ($r = $this->deny()) {
+            return $r;
+        }
+
+        $customer = db_connect()->table('customers')
+            ->select('profile_photo')
+            ->where('id', $customerId)
+            ->get(1)->getRowArray();
+
+        if (! $customer || empty($customer['profile_photo'])) {
+            // Jika foto kosong, kirim gambar transparan 1x1 pixel
+            return $this->response->setHeader('Content-Type', 'image/png')
+                ->setBody(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='));
+        }
+
+        // Gunakan library untuk mengirimkan file gambar yang ada di writable/uploads/profile/
+        return (new CustomerUploads())->streamPhoto($customer['profile_photo']);
+    }
+
     /** $enc = id customer terenkripsi; hasilnya data customer + dokumen identitasnya. */
     private function findCustomer(string $enc): ?array
     {

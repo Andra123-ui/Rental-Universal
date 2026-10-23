@@ -162,7 +162,7 @@ $labels = ['PENDING' => 'Menunggu', 'REJECTED' => 'Ditolak', 'VERIFIED' => 'Terv
                     <td>
                         <div class="cv-who">
                             <span class="cv-ava"
-                                <?= $r['profile_photo'] ? 'style="background-image:url(\'' . esc(base_url('uploads/profile/' . $r['profile_photo']), 'attr') . '\')"' : '' ?>>
+                                <?= $r['profile_photo'] ? 'style="background-image:url(\'' . esc(base_url('backoffice/customer-photo/' . $r['id']), 'attr') . '\')"' : '' ?>>
                                 <?= $r['profile_photo'] ? '' : esc(strtoupper(mb_substr($r['name'], 0, 1))) ?>
                             </span>
                             <div><strong><?= esc($r['name']) ?></strong><br><small
