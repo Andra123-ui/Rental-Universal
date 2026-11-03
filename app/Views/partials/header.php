@@ -2,6 +2,22 @@
 /** @var string|null $title */
 $biz = site_business();
 $bizName = $biz['business_name'] ?? 'Rental Universal';
+
+
+$accountName = 'Akun';
+if (session()->get('customer_logged_in') && session()->get('customer_id')) {
+    $row = db_connect()
+        ->table('customers')
+        ->select('name')
+        ->where('id', session()->get('customer_id'))
+        ->get()
+        ->getRowArray();
+
+    if (!empty($row['name'])) {
+        $accountName = $row['name'];
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -2118,7 +2134,7 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                 <div class="account-dropdown">
                     <button type="button" class="account-trigger">
                         <i class="ti-user"></i>
-                        Akun
+                        <span class="account-name" title="<?= esc($accountName) ?>"><?= esc($accountName) ?></span>
                         <span class="dropdown-arrow"><i class="ti-angle-down"></i></span>
                     </button>
 
@@ -2126,31 +2142,6 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                         <a href="<?= site_url('account') ?>">
                             <i class="ti-dashboard"></i>
                             Dashboard
-                        </a>
-
-                        <a href="<?= site_url('account/bookings') ?>">
-                            <i class="ti-receipt"></i>
-                            Riwayat Booking
-                        </a>
-
-                        <a href="<?= site_url('account/payments') ?>">
-                            <i class="ti-wallet"></i>
-                            Pembayaran Saya
-                        </a>
-
-                        <a href="<?= site_url('account/documents') ?>">
-                            <i class="ti-files"></i>
-                            Invoice & Dokumen
-                        </a>
-
-                        <a href="<?= site_url('account/profile') ?>">
-                            <i class="ti-user"></i>
-                            Profil Saya
-                        </a>
-
-                        <a href="<?= site_url('account/security') ?>">
-                            <i class="ti-lock"></i>
-                            Keamanan Akun
                         </a>
 
                         <div class="dropdown-divider"></div>
