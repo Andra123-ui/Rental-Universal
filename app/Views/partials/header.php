@@ -2123,14 +2123,34 @@ $bizName = $biz['business_name'] ?? 'Rental Universal';
                     </button>
 
                     <div class="account-menu">
-                        <a href="<?= site_url('account/profile') ?>">
-                            <i class="ti-user"></i>
-                            Akun Saya
+                        <a href="<?= site_url('account') ?>">
+                            <i class="ti-dashboard"></i>
+                            Dashboard
                         </a>
 
-                        <a href="<?= base_url('/account/booking') ?>">
+                        <a href="<?= site_url('account/bookings') ?>">
                             <i class="ti-receipt"></i>
-                            Cek Booking
+                            Riwayat Booking
+                        </a>
+
+                        <a href="<?= site_url('account/payments') ?>">
+                            <i class="ti-wallet"></i>
+                            Pembayaran Saya
+                        </a>
+
+                        <a href="<?= site_url('account/documents') ?>">
+                            <i class="ti-files"></i>
+                            Invoice & Dokumen
+                        </a>
+
+                        <a href="<?= site_url('account/profile') ?>">
+                            <i class="ti-user"></i>
+                            Profil Saya
+                        </a>
+
+                        <a href="<?= site_url('account/security') ?>">
+                            <i class="ti-lock"></i>
+                            Keamanan Akun
                         </a>
 
                         <div class="dropdown-divider"></div>

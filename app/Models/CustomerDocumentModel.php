@@ -19,6 +19,10 @@ class CustomerDocumentModel extends Model
         'file_path',
         'expires_at',
         'is_verified',
+        'verification_status',
+        'verified_at',
+        'verified_by',
+        'reject_reason',
         'notes',
     ];
 

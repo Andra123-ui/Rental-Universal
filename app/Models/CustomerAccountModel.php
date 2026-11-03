@@ -15,6 +15,7 @@ class CustomerAccountModel extends Model
         'customer_id',
         'login_phone',
         'phone_verified_at',
+        'onboarded_at',
         'status',
         'last_login_at',
         'last_login_ip',
@@ -40,8 +41,6 @@ class CustomerAccountModel extends Model
 
     /**
      * Cek apakah account sedang dalam status suspended.
-     * Dipakai di CAUTH-02 (verifikasi OTP) — account boleh minta OTP,
-     * tapi tidak boleh berhasil login setelah OTP jika suspended.
      */
     public function isSuspended(array $account): bool
     {

@@ -96,13 +96,11 @@ $routes->post(
     'Payment::process/$1'
 );
 
-
-
 // =====================================================
-// CUSTOMER AUTH (OTP WhatsApp)
+// CUSTOMER PORTAL & AUTH (OTP WhatsApp)
 // =====================================================
 
-$routes->get('account/booking', 'AccountBooking::index');
+$routes->get('account/booking', 'Customer\Bookings::index', ['filter' => 'customerAuth']);
 
 $routes->group('account', [
     'namespace' => 'App\Controllers\Customer'
@@ -118,25 +116,69 @@ $routes->group('account', [
     $routes->post('verify/resend', 'AuthController::resendOtp');
     $routes->get('verify/change-phone', 'AuthController::changePhone');
 
-    // CAUTH-03 — hanya boleh diakses yang sudah login (bukan yang sudah lengkap profil)
+    // CAUTH-03 — hanya boleh diakses yang sudah login
     $routes->get('onboarding', 'AuthController::onboardingForm', ['filter' => 'customerAuth']);
     $routes->post('onboarding', 'AuthController::onboardingSubmit', ['filter' => 'customerAuth']);
 
-    // ===================================================== // CUSTOMER PROFILE // ===================================================== 
-    $routes->get('profile', 'ProfileController::index', [ 'filter' => 'customerAuth' ]); 
-    $routes->post('profile/update', 'ProfileController::update', [ 'filter' => 'customerAuth' ]); 
-    
-    // Ganti nomor WhatsApp 
-    $routes->post('profile/phone/send-otp', 'ProfileController::sendPhoneOtp', [ 'filter' => 'customerAuth' ]); 
-    $routes->post('profile/phone/verify', 'ProfileController::verifyPhoneOtp', [ 'filter' => 'customerAuth' ]);
-    
-    // File dan Foto
-    $routes->get('profile/identity-file', 'ProfileController::identityFile', ['filter' => 'customerAuth']);
-    $routes->get('profile/photo', 'ProfileController::profilePhoto', ['filter' => 'customerAuth']); // <--- ROUTE FOTO BARU
-
     // CAUTH-04
     $routes->post('logout', 'AuthController::logout');
+
+    // -----------------------------------------------------
+    // CUS-01: Dashboard Customer
+    // -----------------------------------------------------
+    $routes->get('/', 'Dashboard::index', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-02: Riwayat Booking
+    // -----------------------------------------------------
+    $routes->get('bookings', 'Bookings::index', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-03: Detail Booking & Cetak Invoice
+    // -----------------------------------------------------
+    $routes->get('bookings/(:segment)/print', 'BookingDetail::print/$1', ['filter' => 'customerAuth']);
+    $routes->get('bookings/(:segment)', 'BookingDetail::show/$1', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-04: Pembayaran Saya
+    // -----------------------------------------------------
+    $routes->get('payments', 'Payments::index', ['filter' => 'customerAuth']);
+    $routes->post('payments/upload-proof/(:segment)', 'Payments::uploadProof/$1', ['filter' => 'customerAuth']);
+    $routes->get('payments/receipt/(:segment)', 'Payments::receipt/$1', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-05: Invoice & Dokumen
+    // -----------------------------------------------------
+    $routes->get('documents', 'Documents::index', ['filter' => 'customerAuth']);
+    $routes->get('documents/download/(:num)', 'Documents::download/$1', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-06: Profil Saya
+    // -----------------------------------------------------
+    $routes->get('profile', 'Profile::index', ['filter' => 'customerAuth']);
+    $routes->post('profile/update', 'Profile::update', ['filter' => 'customerAuth']);
+    $routes->get('profile/photo', 'Profile::photo', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-07: Dokumen Identitas
+    // -----------------------------------------------------
+    $routes->get('identity-documents', 'IdentityDocuments::index', ['filter' => 'customerAuth']);
+    $routes->post('identity-documents/upload', 'IdentityDocuments::upload', ['filter' => 'customerAuth']);
+    $routes->post('identity-documents/delete/(:num)', 'IdentityDocuments::delete/$1', ['filter' => 'customerAuth']);
+    $routes->get('identity-documents/file/(:num)', 'IdentityDocuments::file/$1', ['filter' => 'customerAuth']);
+
+    // -----------------------------------------------------
+    // CUS-08: Keamanan Akun
+    // -----------------------------------------------------
+    $routes->get('security', 'Security::index', ['filter' => 'customerAuth']);
+    $routes->post('security/phone/request-otp', 'Security::requestPhoneOtp', ['filter' => 'customerAuth']);
+    $routes->post('security/phone/verify-otp', 'Security::verifyPhoneOtp', ['filter' => 'customerAuth']);
+    $routes->post('security/phone/cancel-otp', 'Security::cancelPhoneOtp', ['filter' => 'customerAuth']);
 });
+
+// =====================================================
+// BACKOFFICE
+// =====================================================
 
 $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], static function ($routes) {
     $routes->get('/', 'AuthController::login');
@@ -177,4 +219,11 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
     });
 
     $routes->get('customer-photo/(:num)', 'CustomerVerification::profilePhoto/$1', ['filter' => 'backofficeAuth:customer.verify']);
+});
+
+// =====================================================
+// 404 CUSTOM OVERRIDE
+// =====================================================
+$routes->set404Override(static function () {
+    return view('errors/html/error_404');
 });
