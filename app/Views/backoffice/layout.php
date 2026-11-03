@@ -322,6 +322,154 @@
         color: var(--muted);
     }
 
+        .badge-danger {
+        background: #FEE2E2;
+        color: #B91C1C;
+    }
+
+    .badge-info {
+        background: #DBEAFE;
+        color: #1D4ED8;
+    }
+
+    .quick {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 14px;
+        margin-bottom: 20px;
+    }
+
+    .kpi {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px 18px;
+    }
+
+    .kpi-label {
+        font-size: .76rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--muted);
+    }
+
+    .kpi-value {
+        margin: 6px 0 2px;
+        font-family: 'Fraunces', serif;
+        font-size: 1.8rem;
+        font-weight: 600;
+    }
+
+    .kpi-money {
+        font-size: 1.25rem;
+    }
+
+    .kpi-sub {
+        font-size: .78rem;
+        color: var(--muted);
+    }
+
+    .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .panel-title {
+        margin: 0 0 12px;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: .9rem;
+    }
+
+    .list li:last-child {
+        border-bottom: 0;
+    }
+
+    .list-time {
+        flex: 0 0 64px;
+        font-size: .8rem;
+        font-weight: 600;
+        color: var(--muted);
+    }
+
+    .list-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .list-main a {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .filters > div {
+        flex: 1 1 150px;
+        min-width: 140px;
+    }
+
+    .filters > .f-wide {
+        flex: 2 1 240px;
+    }
+
+    .filters > .f-actions {
+        flex: 0 0 auto;
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+    }
+
+    .inv {
+        font-weight: 600;
+        color: var(--accent);
+        text-decoration: none;
+    }
+
+    .row-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .btn-danger {
+        color: #B91C1C;
+    }
+
+    .btn-danger:hover {
+        border-color: #B91C1C;
+        color: #B91C1C;
+    }
+
+    .btn[disabled] {
+        opacity: .45;
+        cursor: not-allowed;
+    }
+
     @media (max-width:860px) {
         body {
             flex-direction: column;
@@ -367,6 +515,9 @@
         <a href="<?= site_url('backoffice/dashboard') ?>"
             class="<?= $nav === 'dashboard' ? 'active' : '' ?>">Dashboard</a>
         <?php if (admin_can('product.view') || admin_can('product.manage')): ?>
+        <?php if (admin_can('booking.view')): ?>
+        <a href="<?= site_url('backoffice/bookings') ?>" class="<?= $nav === 'booking' ? 'active' : '' ?>">Booking</a>
+        <?php endif; ?>
         <a href="<?= site_url('backoffice/produk') ?>" class="<?= $nav === 'produk' ? 'active' : '' ?>">Produk</a>
         <?php endif; ?>
         <?php if (admin_can('jenis.manage')): ?>

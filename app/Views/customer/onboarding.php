@@ -80,10 +80,10 @@ $cls = fn(string $k) => isset($errs[$k]) ? ' is-invalid' : '';
                     </div>
 
                     <div class="form-group">
-                        <label for="address">Alamat <span class="opt">(disarankan)</span></label>
+                        <label for="address">Alamat <span class="req">*</span></label>
                         <textarea id="address" name="address" class="form-control<?= $cls('address') ?>" rows="3"
-                            maxlength="500"
-                            placeholder="Jalan, nomor, kelurahan, kota"><?= old('address', $customer['address'] ?? '') ?></textarea>
+                            maxlength="500" placeholder="Jalan, nomor, kelurahan, kota"
+                            required><?= old('address', $customer['address'] ?? '') ?></textarea>
                         <?php if (isset($errs['address'])): ?><p class="field-error"><?= esc($errs['address']) ?></p>
                         <?php endif; ?>
                     </div>
@@ -91,12 +91,12 @@ $cls = fn(string $k) => isset($errs[$k]) ? ' is-invalid' : '';
 
                 <!-- KOLOM 2: IDENTITAS -->
                 <div class="onb-col">
-                    <h3 class="onb-section">Identitas <span class="opt">(untuk rental tertentu)</span></h3>
+                    <h3 class="onb-section">Identitas</h3>
 
                     <div class="form-group">
-                        <label for="document_type">Jenis Identitas</label>
-                        <select id="document_type" name="document_type"
-                            class="form-control<?= $cls('document_type') ?>">
+                        <label for="document_type">Jenis Identitas <span class="req">*</span></label>
+                        <select id="document_type" name="document_type" class="form-control<?= $cls('document_type') ?>"
+                            required>
                             <option value="">Pilih jenis identitas</option>
                             <?php foreach ($docTypes as $val => $label): ?>
                             <option value="<?= esc($val) ?>"
@@ -111,19 +111,19 @@ $cls = fn(string $k) => isset($errs[$k]) ? ' is-invalid' : '';
                     </div>
 
                     <div class="form-group">
-                        <label for="document_number">Nomor Identitas</label>
+                        <label for="document_number">Nomor Identitas <span class="req">*</span></label>
                         <input type="text" id="document_number" name="document_number"
                             class="form-control<?= $cls('document_number') ?>" maxlength="80"
                             placeholder="Nomor sesuai dokumen"
-                            value="<?= old('document_number', $customer['id_number'] ?? '') ?>">
+                            value="<?= old('document_number', $customer['id_number'] ?? '') ?>" required>
                         <?php if (isset($errs['document_number'])): ?><p class="field-error">
                             <?= esc($errs['document_number']) ?></p><?php endif; ?>
                     </div>
 
                     <div class="form-group">
-                        <label for="id_file">Foto/Dokumen Identitas</label>
+                        <label for="id_file">Foto/Dokumen Identitas <span class="req">*</span></label>
                         <input type="file" id="id_file" name="id_file" class="form-control<?= $cls('id_file') ?>"
-                            accept=".jpg,.jpeg,.png,.pdf">
+                            accept=".jpg,.jpeg,.png,.pdf" required>
                         <?php if (isset($errs['id_file'])): ?>
                         <p class="field-error"><?= esc($errs['id_file']) ?> Pilih ulang file Anda.</p>
                         <?php else: ?>
@@ -493,21 +493,14 @@ body:has(.onb) {
         if (found) root.style.backgroundImage = found;
     }
 
-    // Nomor & foto identitas aktif setelah jenis identitas dipilih
+
     var sel = document.getElementById('document_type');
-    var num = document.getElementById('document_number');
-    var file = document.getElementById('id_file');
     var hint = document.getElementById('id-hint');
 
     function sync() {
-        var on = !!sel.value;
-        num.disabled = !on;
-        file.disabled = !on;
-        num.required = on;
-        file.required = on;
-        hint.textContent = on ?
+        hint.textContent = sel.value ?
             'Nomor dan foto identitas wajib diisi.' :
-            'Pilih jenis identitas dulu untuk mengisi nomor dan foto.';
+            'Pilih jenis identitas, lalu isi nomor dan unggah foto.';
     }
     sel.addEventListener('change', sync);
     sync();

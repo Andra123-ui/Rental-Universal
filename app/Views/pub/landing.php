@@ -366,7 +366,7 @@ helper(['image', 'idhash']);
         <div class="cta-banner">
             <h2>Sudah pernah booking di sini sebelumnya?</h2>
             <div class="cta-actions">
-                <a href="<?= base_url('/cek-booking') ?>" class="btn btn-primary">Cek Booking Saya</a>
+                <a href="<?= base_url('/account/booking') ?>" class="btn btn-primary">Cek Booking Saya</a>
                 <a href="<?= base_url('/catalog') ?>" class="btn btn-light">Lihat Katalog</a>
             </div>
         </div>
