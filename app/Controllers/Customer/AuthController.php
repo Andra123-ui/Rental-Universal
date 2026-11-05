@@ -20,8 +20,7 @@ class AuthController extends BaseController
     // Pesan generik — JANGAN pernah bocorkan apakah nomor terdaftar atau tidak
     protected const GENERIC_MESSAGE = 'Jika nomor Anda terdaftar, kode OTP telah dikirim melalui WhatsApp.';
 
-    // Pesan generik untuk error verifikasi — tidak membedakan salah/expired/blocked
-    // secara teknis ke user, tapi cukup jelas supaya user tahu harus apa.
+    // Pesan verifikasi
     protected const ERR_INVALID_CODE = 'Kode OTP salah. Silakan coba lagi.';
     protected const ERR_EXPIRED = 'Kode OTP sudah tidak berlaku. Silakan minta kode baru.';
     protected const ERR_BLOCKED = 'Terlalu banyak percobaan salah. Silakan minta kode baru.';
@@ -34,6 +33,9 @@ class AuthController extends BaseController
 
     public function __construct()
     {
+        // Paksa zona waktu agar perhitungan OTP akurat dan tidak minus
+        date_default_timezone_set('Asia/Jakarta');
+
         $this->customerModel = new CustomerModel();
         $this->accountModel = new CustomerAccountModel();
         $this->otpModel = new CustomerLoginOtpModel();
@@ -42,13 +44,36 @@ class AuthController extends BaseController
     }
 
     /**
+     * Cek apakah client meminta respons JSON/AJAX.
+     */
+    protected function wantsJson(): bool
+    {
+        return $this->request->isAJAX()
+            || str_contains((string) $this->request->getHeaderLine('Accept'), 'application/json')
+            || (string) $this->request->getPost('ajax') === '1'
+            || (string) $this->request->getGet('ajax') === '1';
+    }
+
+    /**
+     * Helper standard JSON response.
+     */
+    protected function jsonResponse(array $data, int $statusCode = 200)
+    {
+        return $this->response
+            ->setStatusCode($statusCode)
+            ->setContentType('application/json')
+            ->setJSON($data);
+    }
+
+    /**
      * GET /account/login
-     * Menampilkan form login (nomor HP) — CAUTH-01.
      */
     public function login()
     {
-        // Simpan return_url ke session bila ada & valid, supaya customer
-        // dikembalikan ke proses sebelumnya (mis. checkout) setelah login.
+        if (session()->get('customer_logged_in')) {
+            return redirect()->to(site_url('account'));
+        }
+
         $returnUrl = $this->request->getGet('return_url');
         if ($returnUrl !== null && $this->isSafeReturnUrl($returnUrl)) {
             session()->set('customer_login_return_url', $returnUrl);
@@ -61,120 +86,190 @@ class AuthController extends BaseController
 
     /**
      * POST /account/login/send-otp
-     * Memproses submit form: validasi, normalisasi nomor, rate limit,
-     * generate & kirim OTP. Selalu balas pesan generik.
      */
     public function sendOtp()
     {
-        $rules = [
-            'phone' => 'required|min_length[8]|max_length[20]',
-        ];
-
-        if (!$this->validate($rules)) {
-            return redirect()->back()->withInput()
-                ->with('errors', $this->validator->getErrors());
-        }
-
         $rawPhone = (string) $this->request->getPost('phone');
         $ip = $this->request->getIPAddress();
         $userAgent = (string) $this->request->getUserAgent();
 
-        $phone = $this->otpService->normalizePhone($rawPhone);
+        // 1. Validasi nomor telepon
+        $valResult = $this->otpService->validateAndNormalizePhone($rawPhone);
+        if (!$valResult['valid']) {
+            $errCode = match ($valResult['error_type']) {
+                'empty'     => 'empty_phone',
+                'too_short' => 'phone_too_short',
+                'too_long'  => 'phone_too_long',
+                default     => 'invalid_format',
+            };
 
-        if ($phone === null) {
-            // Format tidak valid tetap dibalas pesan yang tidak spesifik
-            return redirect()->back()->withInput()
-                ->with('errors', ['phone' => 'Format nomor HP tidak valid.']);
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'     => 'error',
+                    'code'       => $errCode,
+                    'error_type' => $valResult['error_type'],
+                    'title'      => $valResult['title'],
+                    'message'    => $valResult['message'],
+                ], 422);
+            }
+
+            return redirect()->back()->withInput()->with('popup', [
+                'type'    => 'warning',
+                'title'   => $valResult['title'],
+                'message' => $valResult['message'],
+            ])->with('errors', ['phone' => $valResult['message']]);
         }
 
-        // Bypass OTP sementara (WA sedang error). Aktif hanya bila otp.bypass=true & bukan production.
+        $phone = $valResult['canonical'];
+
+        // Bypass OTP sementara
         if ($this->isOtpBypassEnabled()) {
             return $this->loginWithoutOtp($phone, $ip, $userAgent);
         }
 
         // --- Rate limit per phone + IP ---
         if ($this->isRateLimited($phone, $ip)) {
-            return redirect()->back()->withInput()
-                ->with('notice', self::GENERIC_MESSAGE);
-            // Sengaja tidak membedakan pesan rate-limit dari pesan sukses,
-            // supaya tidak jadi sinyal enumerasi nomor.
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'server_error',
+                    'title'   => 'Gangguan Sistem',
+                    'message' => 'Terjadi kendala pada server atau batas percobaan terlampaui. Silakan coba beberapa saat lagi.',
+                ], 429);
+            }
+
+            return redirect()->back()->withInput()->with('popup', [
+                'type'    => 'error',
+                'title'   => 'Gangguan Sistem',
+                'message' => 'Terjadi kendala pada server atau batas percobaan terlampaui. Silakan coba beberapa saat lagi.',
+            ]);
         }
 
-        // Cegah kirim ulang terlalu cepat selagi OTP sebelumnya masih aktif
+        // Cegah kirim ulang terlalu cepat
         $pending = $this->otpModel->latestPendingByPhone($phone);
         if ($pending !== null) {
-            return redirect()->back()->withInput()
-                ->with('notice', self::GENERIC_MESSAGE);
+            $createdAt = strtotime($pending['created_at']);
+            $elapsed = time() - $createdAt;
+            
+            if ($elapsed < OtpService::RESEND_COOLDOWN_SECONDS) {
+                $remaining = OtpService::RESEND_COOLDOWN_SECONDS - $elapsed;
+                
+                // PENGAMAN: Maksimal 60 detik, minimal 1 detik
+                if ($remaining > 60) $remaining = 60;
+                if ($remaining < 1) $remaining = 1;
+
+                if ($this->wantsJson()) {
+                    return $this->jsonResponse([
+                        'status'    => 'error',
+                        'code'      => 'cooldown',
+                        'title'     => 'Mohon Tunggu',
+                        'message'   => "Kode OTP baru saja dikirim. Silakan tunggu {$remaining} detik sebelum meminta kode baru.",
+                        'remaining' => $remaining,
+                    ], 429);
+                }
+
+                return redirect()->back()->withInput()->with('notice', self::GENERIC_MESSAGE);
+            }
+
+            // Sudah lewat cooldown, tandai expired OTP sebelumnya
+            $this->otpModel->markExpired($pending['id']);
         }
 
         $account = $this->accountModel->findByLoginPhone($phone);
 
-        // Nomor belum pernah dipakai login -> auto-registrasi customer + account baru.
-        // Nama diisi placeholder (nomor HP itu sendiri) dan dilengkapi nanti di CAUTH-03.
+        // Nomor belum pernah dipakai login -> auto-registrasi
         if ($account === null) {
             $customerId = $this->customerModel->insert([
-                'name' => $phone,
+                'name'  => $phone,
                 'phone' => $phone,
             ], true);
 
             $accountId = $this->accountModel->insert([
                 'customer_id' => $customerId,
                 'login_phone' => $phone,
-                'status' => CustomerAccountModel::STATUS_PENDING,
+                'status'      => CustomerAccountModel::STATUS_PENDING,
             ], true);
 
             $account = $this->accountModel->find($accountId);
         }
-
-        session()->set('customer_login_phone', $phone);
-        session()->set('customer_login_otp_display_expires_at', date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS));
-
-        // Catatan: customer berstatus SUSPENDED tetap boleh sampai di sini
-        // (tetap dapat OTP), tapi WAJIB ditolak saat verifikasi di CAUTH-02.
-        // Jangan tambahkan pengecekan suspended di titik ini.
 
         $code = $this->otpService->generateCode();
         $codeHash = $this->otpService->hashCode($code);
 
         $this->otpModel->insert([
             'customer_account_id' => $account['id'],
-            'phone' => $phone,
-            'purpose' => CustomerLoginOtpModel::PURPOSE_LOGIN,
-            'code_hash' => $codeHash,
-            'expires_at' => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
-            'attempt_count' => 0,
-            'max_attempts' => 5,
-            'status' => CustomerLoginOtpModel::STATUS_PENDING,
-            'requested_ip' => $ip,
-            'user_agent' => $userAgent,
+            'phone'               => $phone,
+            'purpose'             => CustomerLoginOtpModel::PURPOSE_LOGIN,
+            'code_hash'           => $codeHash,
+            'expires_at'          => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
+            'attempt_count'       => 0,
+            'max_attempts'        => 5,
+            'status'              => CustomerLoginOtpModel::STATUS_PENDING,
+            'requested_ip'        => $ip,
+            'user_agent'          => $userAgent,
         ]);
 
+        // Kirim OTP melalui WhatsApp Gateway
         $sent = $this->otpService->sendViaWhatsapp($phone, $code);
 
         if (!$sent) {
-            log_message('error', "Gagal mengirim OTP WhatsApp ke {$phone}");
-            // Tetap balas pesan generik ke user walau pengiriman gagal di sisi kita,
-            // supaya tidak membocorkan detail infrastruktur ke publik.
-        } else {
-            $this->activityLogModel->record(
-                ActivityLogModel::EVENT_LOGIN_OTP_SENT,
-                $account['id'],
-                $ip,
-                $userAgent
-            );
+            $lastErr = $this->otpService->getLastError() ?? 'Unknown error';
+            log_message('error', "Gagal mengirim OTP WhatsApp ke {$phone}: {$lastErr}");
+
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_failed',
+                    'title'   => 'Gagal Mengirim OTP',
+                    'message' => 'Terjadi kesalahan saat mengirim kode OTP. Pastikan nomor terdaftar di WhatsApp atau coba lagi nanti.',
+                    'debug'   => ENVIRONMENT !== 'production' ? $lastErr : null,
+                ], 500);
+            }
+
+            return redirect()->back()->withInput()->with('popup', [
+                'type'    => 'error',
+                'title'   => 'Gagal Mengirim OTP',
+                'message' => 'Terjadi kesalahan saat mengirim kode OTP. Pastikan nomor terdaftar di WhatsApp atau coba lagi nanti.',
+            ]);
         }
 
-        // Simpan account_id di session HANYA untuk kenyamanan (tidak wajib —
-        // verify akan tetap cari ulang berdasarkan phone kalau ini kosong)
+        // Pengiriman sukses
+        $this->activityLogModel->record(
+            ActivityLogModel::EVENT_LOGIN_OTP_SENT,
+            $account['id'],
+            $ip,
+            $userAgent
+        );
+
+        session()->set('customer_login_phone', $phone);
         session()->set('customer_login_account_id', $account['id']);
+        session()->set('customer_login_otp_display_expires_at', date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS));
+
+        if ($this->wantsJson()) {
+            return $this->jsonResponse([
+                'status'          => 'success',
+                'code'            => 'otp_sent',
+                'title'           => 'Kode OTP Berhasil Dikirim',
+                'message'         => 'Kode OTP telah dikirim ke nomor WhatsApp Anda. Silakan periksa pesan masuk.',
+                'canonical_phone' => $phone,
+                'masked_phone'    => $this->otpService->maskPhone($phone),
+                'redirect'        => site_url('account/verify'),
+                'expires_in'      => OtpService::OTP_TTL_SECONDS,
+                'cooldown'        => OtpService::RESEND_COOLDOWN_SECONDS,
+            ]);
+        }
 
         return redirect()->to(site_url('account/verify'))
+            ->with('popup', [
+                'type'    => 'success',
+                'title'   => 'Kode OTP Berhasil Dikirim',
+                'message' => 'Kode OTP telah dikirim ke nomor WhatsApp Anda. Silakan periksa pesan masuk.',
+            ])
             ->with('notice', self::GENERIC_MESSAGE);
     }
 
     /**
      * GET /account/verify
-     * Tampilkan form verifikasi OTP — CAUTH-02.
      */
     public function verifyForm()
     {
@@ -188,21 +283,17 @@ class AuthController extends BaseController
         $account = $this->accountModel->findByLoginPhone($phone);
         $otp = $account ? $this->otpModel->latestPendingByAccountId((int) $account['id']) : null;
 
-        // Kalau tidak ada OTP nyata (akun tidak ditemukan / OTP sudah tidak pending),
-        // pakai waktu display dari session supaya countdown tetap konsisten
-        // secara visual dan tidak jadi sinyal enumerasi nomor.
         $expiresAt = $otp['expires_at'] ?? session()->get('customer_login_otp_display_expires_at');
 
         return view('customer/verify', [
-            'maskedPhone' => $this->otpService->maskPhone($phone),
-            'expiresAt' => $expiresAt,
+            'maskedPhone'    => $this->otpService->maskPhone($phone),
+            'expiresAt'      => $expiresAt,
             'resendCooldown' => OtpService::RESEND_COOLDOWN_SECONDS,
         ]);
     }
 
     /**
      * POST /account/verify
-     * Verifikasi kode OTP, bentuk session customer, rotate session ID.
      */
     public function verifyOtp()
     {
@@ -211,32 +302,80 @@ class AuthController extends BaseController
         $userAgent = (string) $this->request->getUserAgent();
 
         if (!$phone) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'   => 'error',
+                    'code'     => 'session_expired',
+                    'title'    => 'Sesi Berakhir',
+                    'message'  => self::ERR_NO_SESSION,
+                    'redirect' => site_url('account/login'),
+                ], 401);
+            }
+
             return redirect()->to(site_url('account/login'))
                 ->with('errors', ['session' => self::ERR_NO_SESSION]);
         }
 
-        if (!$this->validate(['code' => 'required|exact_length[6]|numeric'])) {
+        $code = (string) $this->request->getPost('code');
+
+        if (empty($code) || strlen($code) !== 6 || !ctype_digit($code)) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_invalid',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
+                ->with('popup', [
+                    'type'    => 'error',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ])
                 ->with('errors', ['code' => self::ERR_INVALID_CODE]);
         }
 
-        $code = (string) $this->request->getPost('code');
         $account = $this->accountModel->findByLoginPhone($phone);
 
-        // Nomor tidak terdaftar -> tidak pernah ada OTP asli yang cocok,
-        // jadi kode apa pun otomatis dianggap salah (pesan generik, sama
-        // seperti kode salah biasa — tidak membocorkan status terdaftar).
         if ($account === null) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_invalid',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
-                ->with('errors', ['code' => self::ERR_INVALID_CODE]);
+                ->with('popup', [
+                    'type'    => 'error',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ]);
         }
 
         $accountId = (int) $account['id'];
         $otp = $this->otpModel->latestPendingByAccountId($accountId);
 
         if ($otp === null) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_expired',
+                    'title'   => 'Kode OTP Kedaluwarsa',
+                    'message' => 'Kode verifikasi telah habis masa berlakunya. Silakan minta kode baru.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
-                ->with('errors', ['code' => self::ERR_EXPIRED]);
+                ->with('popup', [
+                    'type'    => 'warning',
+                    'title'   => 'Kode OTP Kedaluwarsa',
+                    'message' => 'Kode verifikasi telah habis masa berlakunya. Silakan minta kode baru.',
+                ]);
         }
 
         // Cek expiry
@@ -244,13 +383,26 @@ class AuthController extends BaseController
             $this->otpModel->markExpired($otp['id']);
             $this->activityLogModel->record(
                 ActivityLogModel::EVENT_LOGIN_OTP_EXPIRED,
-                (int) $accountId,
+                $accountId,
                 $ip,
                 $userAgent
             );
 
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_expired',
+                    'title'   => 'Kode OTP Kedaluwarsa',
+                    'message' => 'Kode verifikasi telah habis masa berlakunya. Silakan minta kode baru.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
-                ->with('errors', ['code' => self::ERR_EXPIRED]);
+                ->with('popup', [
+                    'type'    => 'warning',
+                    'title'   => 'Kode OTP Kedaluwarsa',
+                    'message' => 'Kode verifikasi telah habis masa berlakunya. Silakan minta kode baru.',
+                ]);
         }
 
         // Cek max attempts
@@ -258,37 +410,62 @@ class AuthController extends BaseController
             $this->otpModel->markBlocked($otp['id']);
             $this->activityLogModel->record(
                 ActivityLogModel::EVENT_LOGIN_OTP_BLOCKED,
-                (int) $accountId,
+                $accountId,
                 $ip,
                 $userAgent
             );
 
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_invalid',
+                    'title'   => 'Kode OTP Diblokir',
+                    'message' => 'Terlalu banyak percobaan salah. Silakan minta kode baru.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
-                ->with('errors', ['code' => self::ERR_BLOCKED]);
+                ->with('popup', [
+                    'type'    => 'error',
+                    'title'   => 'Kode OTP Diblokir',
+                    'message' => 'Terlalu banyak percobaan salah. Silakan minta kode baru.',
+                ]);
         }
 
-        // Cek kode OTP (hash compare)
+        // Cek kode OTP
         if (!$this->otpService->verifyCode($code, $otp['code_hash'])) {
             $this->otpModel->incrementAttempt($otp['id']);
             $this->activityLogModel->record(
                 ActivityLogModel::EVENT_LOGIN_OTP_FAILED,
-                (int) $accountId,
+                $accountId,
                 $ip,
                 $userAgent
             );
 
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_invalid',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ], 422);
+            }
+
             return redirect()->to(site_url('account/verify'))
-                ->with('errors', ['code' => self::ERR_INVALID_CODE]);
+                ->with('popup', [
+                    'type'    => 'error',
+                    'title'   => 'Kode OTP Tidak Sesuai',
+                    'message' => 'Kode yang Anda masukkan salah. Silakan periksa kembali.',
+                ]);
         }
 
-        // --- Sukses ---
-        $this->otpModel->markUsed($otp['id']); // one-time use
+        // --- Sukses Verifikasi ---
+        $this->otpModel->markUsed($otp['id']);
 
-        // Customer suspended: OTP boleh benar, tapi login TETAP DITOLAK di sini.
-        if ($account && $this->accountModel->isSuspended($account)) {
+        if ($this->accountModel->isSuspended($account)) {
             $this->activityLogModel->record(
                 ActivityLogModel::EVENT_LOGIN_OTP_FAILED,
-                (int) $accountId,
+                $accountId,
                 $ip,
                 $userAgent,
                 'Login ditolak: akun suspended'
@@ -296,47 +473,69 @@ class AuthController extends BaseController
 
             session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
 
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'account_suspended',
+                    'title'   => 'Akun Dinonaktifkan',
+                    'message' => 'Akun Anda sedang tidak dapat digunakan. Hubungi bantuan pelanggan.',
+                ], 403);
+            }
+
             return redirect()->to(site_url('account/login'))
                 ->with('errors', ['code' => 'Akun Anda sedang tidak dapat digunakan. Hubungi bantuan pelanggan.']);
         }
 
-        $this->accountModel->update((int) $accountId, [
+        $this->accountModel->update($accountId, [
             'phone_verified_at' => date('Y-m-d H:i:s'),
-            'status' => CustomerAccountModel::STATUS_ACTIVE,
-            'last_login_at' => date('Y-m-d H:i:s'),
-            'last_login_ip' => $ip,
-            'failed_attempts' => 0,
+            'status'            => CustomerAccountModel::STATUS_ACTIVE,
+            'last_login_at'     => date('Y-m-d H:i:s'),
+            'last_login_ip'     => $ip,
+            'failed_attempts'   => 0,
         ]);
 
-        // Rotate session ID setelah login berhasil (cegah session fixation)
         session()->regenerate(true);
 
         session()->set([
-            'customer_logged_in' => true,
-            'customer_id' => $account['customer_id'],
+            'customer_logged_in'  => true,
+            'customer_id'         => $account['customer_id'],
             'customer_account_id' => $account['id'],
         ]);
         session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
 
         $this->activityLogModel->record(
             ActivityLogModel::EVENT_LOGIN_SUCCESS,
-            (int) $accountId,
+            $accountId,
             $ip,
             $userAgent
         );
 
-        // Belum melengkapi profil -> onboarding dulu (return_url tetap tersimpan di session)
         $freshAccount = $this->accountModel->find($accountId);
-        if (empty($freshAccount['onboarded_at'])) {
-            return redirect()->to(site_url('account/onboarding'));
+        $targetUrl = empty($freshAccount['onboarded_at'])
+            ? site_url('account/onboarding')
+            : site_url(ltrim(session()->get('customer_login_return_url') ?? 'account', '/'));
+
+        session()->remove('customer_login_return_url');
+
+        if ($this->wantsJson()) {
+            return $this->jsonResponse([
+                'status'   => 'success',
+                'code'     => 'login_success',
+                'title'    => 'Login Berhasil',
+                'message'  => 'Mengalihkan ke dashboard...',
+                'redirect' => $targetUrl,
+            ]);
         }
 
-        return $this->redirectAfterLogin();
+        return redirect()->to($targetUrl)->with('popup', [
+            'type'    => 'success',
+            'title'   => 'Login Berhasil',
+            'message' => 'Mengalihkan ke dashboard...',
+        ]);
     }
 
     /**
      * POST /account/verify/resend
-     * Kirim ulang OTP setelah cooldown terpenuhi.
      */
     public function resendOtp()
     {
@@ -345,15 +544,32 @@ class AuthController extends BaseController
         $userAgent = (string) $this->request->getUserAgent();
 
         if (!$phone) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'   => 'error',
+                    'code'     => 'session_expired',
+                    'title'    => 'Sesi Berakhir',
+                    'message'  => self::ERR_NO_SESSION,
+                    'redirect' => site_url('account/login'),
+                ], 401);
+            }
+
             return redirect()->to(site_url('account/login'))
                 ->with('errors', ['session' => self::ERR_NO_SESSION]);
         }
 
-        // Refresh display expiry supaya countdown di halaman tetap konsisten
-        // baik akun terdaftar maupun tidak.
         session()->set('customer_login_otp_display_expires_at', date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS));
 
         if ($this->isRateLimited($phone, $ip)) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'server_error',
+                    'title'   => 'Gangguan Sistem',
+                    'message' => 'Terjadi kendala pada server atau limit tercapai. Silakan coba beberapa saat lagi.',
+                ], 429);
+            }
+
             return redirect()->to(site_url('account/verify'))
                 ->with('notice', self::GENERIC_MESSAGE);
         }
@@ -361,30 +577,46 @@ class AuthController extends BaseController
         $pending = $this->otpModel->latestPendingByPhone($phone);
         if ($pending !== null) {
             $createdAt = strtotime($pending['created_at']);
-            if (time() - $createdAt < OtpService::RESEND_COOLDOWN_SECONDS) {
-                // Masih dalam cooldown — jangan buat OTP baru
+            $elapsed = time() - $createdAt;
+            
+            if ($elapsed < OtpService::RESEND_COOLDOWN_SECONDS) {
+                $remaining = OtpService::RESEND_COOLDOWN_SECONDS - $elapsed;
+                
+                // PENGAMAN: Maksimal 60 detik, minimal 1 detik
+                if ($remaining > 60) $remaining = 60;
+                if ($remaining < 1) $remaining = 1;
+
+                if ($this->wantsJson()) {
+                    return $this->jsonResponse([
+                        'status'    => 'error',
+                        'code'      => 'cooldown',
+                        'title'     => 'Mohon Tunggu',
+                        'message'   => "Silakan tunggu {$remaining} detik sebelum meminta kode OTP kembali.",
+                        'remaining' => $remaining,
+                    ], 429);
+                }
+
                 return redirect()->to(site_url('account/verify'))
                     ->with('notice', self::GENERIC_MESSAGE);
             }
-            // Cooldown lewat: OTP lama dianggap kadaluarsa begitu ada request baru
+
             $this->otpModel->markExpired($pending['id']);
         }
 
         $account = $this->accountModel->findByLoginPhone($phone);
-
         if ($account === null) {
             $customerId = $this->customerModel->insert([
-                'name' => $phone,
+                'name'  => $phone,
                 'phone' => $phone,
             ], true);
 
             $accountId = $this->accountModel->insert([
                 'customer_id' => $customerId,
                 'login_phone' => $phone,
-                'status' => CustomerAccountModel::STATUS_PENDING,
+                'status'      => CustomerAccountModel::STATUS_PENDING,
             ], true);
         } else {
-            $accountId = $account['id'];
+            $accountId = (int) $account['id'];
         }
 
         $code = $this->otpService->generateCode();
@@ -392,47 +624,77 @@ class AuthController extends BaseController
 
         $this->otpModel->insert([
             'customer_account_id' => $accountId,
-            'phone' => $phone,
-            'purpose' => CustomerLoginOtpModel::PURPOSE_LOGIN,
-            'code_hash' => $codeHash,
-            'expires_at' => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
-            'attempt_count' => 0,
-            'max_attempts' => 5,
-            'status' => CustomerLoginOtpModel::STATUS_PENDING,
-            'requested_ip' => $ip,
-            'user_agent' => $userAgent,
+            'phone'               => $phone,
+            'purpose'             => CustomerLoginOtpModel::PURPOSE_LOGIN,
+            'code_hash'           => $codeHash,
+            'expires_at'          => date('Y-m-d H:i:s', time() + OtpService::OTP_TTL_SECONDS),
+            'attempt_count'       => 0,
+            'max_attempts'        => 5,
+            'status'              => CustomerLoginOtpModel::STATUS_PENDING,
+            'requested_ip'        => $ip,
+            'user_agent'          => $userAgent,
         ]);
 
         $sent = $this->otpService->sendViaWhatsapp($phone, $code);
-        if ($sent) {
-            $this->activityLogModel->record(
-                ActivityLogModel::EVENT_LOGIN_OTP_SENT,
-                (int) $accountId,
-                $ip,
-                $userAgent,
-                'Resend'
-            );
+
+        if (!$sent) {
+            $lastErr = $this->otpService->getLastError() ?? 'Unknown error';
+            log_message('error', "Gagal mengirim ulang OTP WhatsApp ke {$phone}: {$lastErr}");
+
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'otp_failed',
+                    'title'   => 'Gagal Mengirim OTP',
+                    'message' => 'Terjadi kesalahan saat mengirim kode OTP. Pastikan nomor terdaftar di WhatsApp atau coba lagi nanti.',
+                    'debug'   => ENVIRONMENT !== 'production' ? $lastErr : null,
+                ], 500);
+            }
+
+            return redirect()->to(site_url('account/verify'))->with('popup', [
+                'type'    => 'error',
+                'title'   => 'Gagal Mengirim OTP',
+                'message' => 'Terjadi kesalahan saat mengirim kode OTP. Pastikan nomor terdaftar di WhatsApp atau coba lagi nanti.',
+            ]);
         }
 
-        return redirect()->to(site_url('account/verify'))
-            ->with('notice', self::GENERIC_MESSAGE);
+        $this->activityLogModel->record(
+            ActivityLogModel::EVENT_LOGIN_OTP_SENT,
+            $accountId,
+            $ip,
+            $userAgent,
+            'Resend'
+        );
+
+        if ($this->wantsJson()) {
+            return $this->jsonResponse([
+                'status'     => 'success',
+                'code'       => 'otp_sent',
+                'title'      => 'Kode OTP Berhasil Dikirim',
+                'message'    => 'Kode OTP telah dikirim ke nomor WhatsApp Anda. Silakan periksa pesan masuk.',
+                'expires_in' => OtpService::OTP_TTL_SECONDS,
+                'cooldown'   => OtpService::RESEND_COOLDOWN_SECONDS,
+            ]);
+        }
+
+        return redirect()->to(site_url('account/verify'))->with('popup', [
+            'type'    => 'success',
+            'title'   => 'Kode OTP Berhasil Dikirim',
+            'message' => 'Kode OTP telah dikirim ke nomor WhatsApp Anda. Silakan periksa pesan masuk.',
+        ]);
     }
 
     /**
      * GET /account/verify/change-phone
-     * Kembali ke input nomor — hapus session verifikasi yang sedang berjalan.
      */
     public function changePhone()
     {
         session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
-
         return redirect()->to(site_url('account/login'));
     }
 
     /**
      * GET /account/logout
-     * Hapus session customer (logout), kembali ke return_url kalau ada
-     * (misal dari halaman checkout), atau ke beranda.
      */
     public function logout()
     {
@@ -441,19 +703,11 @@ class AuthController extends BaseController
         $accountId = session()->get('customer_account_id');
 
         if ($accountId) {
-            // Pakai string literal 'LOGOUT' karena constant EVENT_LOGOUT belum
-            // tentu didefinisikan di ActivityLogModel — kalau Anda sudah punya
-            // constant itu, boleh diganti jadi ActivityLogModel::EVENT_LOGOUT.
-            $this->activityLogModel->record(
-                'LOGOUT',
-                (int) $accountId,
-                $ip,
-                $userAgent
-            );
+            $this->activityLogModel->record('LOGOUT', (int) $accountId, $ip, $userAgent);
         }
 
         session()->remove(['customer_logged_in', 'customer_id', 'customer_account_id']);
-        session()->regenerate(true); // cegah session fixation setelah logout juga
+        session()->regenerate(true);
 
         $returnUrl = $this->request->getGet('return_url');
         if ($returnUrl !== null && $this->isSafeReturnUrl($returnUrl)) {
@@ -464,124 +718,104 @@ class AuthController extends BaseController
     }
 
     /**
- * GET /account/onboarding
- * Lengkapi data profil setelah login OTP pertama — CAUTH-03.
- */
-public function onboardingForm()
-{
-    $subject = $this->onboardingSubject();
-    if ($subject === null) {
-        return redirect()->to(site_url('account/login'))
-            ->with('errors', ['session' => self::ERR_NO_SESSION]);
-    }
-    [$customer, $account] = $subject;
-
-    // Sudah pernah melengkapi profil -> tidak perlu lewat sini lagi
-    if (!empty($account['onboarded_at'])) {
-        return $this->redirectAfterLogin();
-    }
-
-    // Akun baru dibuat dengan name = nomor HP (placeholder), jangan tampilkan di form
-    $prefillName = ($customer['name'] === $customer['phone']) ? '' : $customer['name'];
-
-    return view('customer/onboarding', [
-        'customer'    => $customer,
-        'prefillName' => $prefillName,
-        'docTypes'    => self::DOC_TYPES,
-    ]);
-}
-
-    /**
- * POST /account/onboarding
- * Simpan data onboarding customer — CAUTH-03.
- */
-    public function onboardingSubmit()
-{
-    $subject = $this->onboardingSubject();
-    if ($subject === null) {
-        return redirect()->to(site_url('account/login'))
-            ->with('errors', ['session' => self::ERR_NO_SESSION]);
-    }
-    [$customer, $account] = $subject;
-
-    if (!empty($account['onboarded_at'])) {
-        return $this->redirectAfterLogin();
-    }
-
-    $customerId = (int) $customer['id'];
-    $docType = strtoupper(trim((string) $this->request->getPost('document_type')));
-
-    // Data diri: nama & alamat WAJIB. Email opsional.
-    // Identitas: jenis, nomor, file WAJIB.
-    // Kontak darurat & catatan: opsional.
-    $rules = [
-        'name'    => 'required|min_length[3]|max_length[150]',
-        'email'   => 'permit_empty|valid_email|max_length[150]',
-        'address' => 'required|min_length[5]|max_length[500]',
-
-        'document_type'   => 'required|in_list[' . implode(',', array_keys(self::DOC_TYPES)) . ']',
-        'document_number' => 'required|min_length[5]|max_length[80]',
-        'id_file'         => 'uploaded[id_file]|max_size[id_file,4096]|mime_in[id_file,image/jpg,image/jpeg,image/png,application/pdf]',
-
-        'emergency_contact_name'  => 'permit_empty|max_length[150]',
-        'emergency_contact_phone' => 'permit_empty|min_length[9]|max_length[30]|regex_match[/^[0-9+\-\s]+$/]',
-        'notes' => 'permit_empty|max_length[500]',
-    ];
-
-    if (!$this->validate($rules)) {
-        return redirect()->back()->withInput()
-            ->with('errors', $this->validator->getErrors());
-    }
-
-    $db = \Config\Database::connect();
-    $db->transStart();
-
-    // 1) Profil customer — identitas selalu terisi karena sudah divalidasi wajib
-    $profile = [
-        'name'    => trim((string) $this->request->getPost('name')),
-        'email'   => $this->postOrNull('email'),
-        'address' => $this->postOrNull('address'),
-        'emergency_contact_name'  => $this->postOrNull('emergency_contact_name'),
-        'emergency_contact_phone' => $this->postOrNull('emergency_contact_phone'),
-        'notes'   => $this->postOrNull('notes'),
-        'id_type'   => $docType,
-        'id_number' => trim((string) $this->request->getPost('document_number')),
-    ];
-    $db->table('customers')->where('id', $customerId)->update($profile);
-
-    // 2) File identitas (writable/uploads, tidak bisa dibuka lewat URL)
-    $file = $this->request->getFile('id_file');
-    if ($file === null || !$file->isValid() || $file->hasMoved()) {
-        // Jaring pengaman; normalnya sudah tertangkap validasi 'uploaded[id_file]'
-        return redirect()->back()->withInput()
-            ->with('errors', ['id_file' => 'File identitas tidak valid. Pilih ulang file Anda.']);
-    }
-
-    $db->table('customer_documents')->insert([
-        'customer_id'     => $customerId,
-        'document_type'   => $docType,
-        'document_number' => $profile['id_number'],
-        'file_path'       => $file->store('customer_documents/' . $customerId),
-        'is_verified'     => 0,
-    ]);
-
-    // 3) Tandai onboarding selesai
-    $db->table('customer_accounts')->where('id', (int) $account['id'])
-        ->update(['onboarded_at' => date('Y-m-d H:i:s')]);
-
-    $db->transComplete();
-
-    if ($db->transStatus() === false) {
-        return redirect()->back()->withInput()
-            ->with('errors', ['form' => 'Gagal menyimpan data. Silakan coba lagi.']);
-    }
-
-    return $this->redirectAfterLogin()->with('success', 'Data profil Anda berhasil disimpan.');
-}
-
-    /**
-     * Customer + account dari session login, atau null kalau tidak ada.
+     * GET /account/onboarding
      */
+    public function onboardingForm()
+    {
+        $subject = $this->onboardingSubject();
+        if ($subject === null) {
+            return redirect()->to(site_url('account/login'))
+                ->with('errors', ['session' => self::ERR_NO_SESSION]);
+        }
+        [$customer, $account] = $subject;
+
+        if (!empty($account['onboarded_at'])) {
+            return $this->redirectAfterLogin();
+        }
+
+        $prefillName = ($customer['name'] === $customer['phone']) ? '' : $customer['name'];
+
+        return view('customer/onboarding', [
+            'customer'    => $customer,
+            'prefillName' => $prefillName,
+            'docTypes'    => self::DOC_TYPES,
+        ]);
+    }
+
+    /**
+     * POST /account/onboarding
+     */
+    public function onboardingSubmit()
+    {
+        $subject = $this->onboardingSubject();
+        if ($subject === null) {
+            return redirect()->to(site_url('account/login'))
+                ->with('errors', ['session' => self::ERR_NO_SESSION]);
+        }
+        [$customer, $account] = $subject;
+
+        if (!empty($account['onboarded_at'])) {
+            return $this->redirectAfterLogin();
+        }
+
+        $customerId = (int) $customer['id'];
+        $docType = strtoupper(trim((string) $this->request->getPost('document_type')));
+
+        $rules = [
+            'name'    => 'required|min_length[3]|max_length[150]',
+            'email'   => 'permit_empty|valid_email|max_length[150]',
+            'address' => 'required|min_length[5]|max_length[500]',
+            'document_type'   => 'required|in_list[' . implode(',', array_keys(self::DOC_TYPES)) . ']',
+            'document_number' => 'required|min_length[5]|max_length[80]',
+            'id_file'         => 'uploaded[id_file]|max_size[id_file,4096]|mime_in[id_file,image/jpg,image/jpeg,image/png,application/pdf]',
+            'emergency_contact_name'  => 'permit_empty|max_length[150]',
+            'emergency_contact_phone' => 'permit_empty|min_length[9]|max_length[30]|regex_match[/^[0-9+\-\s]+$/]',
+            'notes' => 'permit_empty|max_length[500]',
+        ];
+
+        if (!$this->validate($rules)) {
+            return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
+        }
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        $profile = [
+            'name'                    => trim((string) $this->request->getPost('name')),
+            'email'                   => $this->postOrNull('email'),
+            'address'                 => $this->postOrNull('address'),
+            'emergency_contact_name'  => $this->postOrNull('emergency_contact_name'),
+            'emergency_contact_phone' => $this->postOrNull('emergency_contact_phone'),
+            'notes'                   => $this->postOrNull('notes'),
+            'id_type'                 => $docType,
+            'id_number'               => trim((string) $this->request->getPost('document_number')),
+        ];
+        $db->table('customers')->where('id', $customerId)->update($profile);
+
+        $file = $this->request->getFile('id_file');
+        if ($file === null || !$file->isValid() || $file->hasMoved()) {
+            return redirect()->back()->withInput()->with('errors', ['id_file' => 'File identitas tidak valid. Pilih ulang file Anda.']);
+        }
+
+        $db->table('customer_documents')->insert([
+            'customer_id'     => $customerId,
+            'document_type'   => $docType,
+            'document_number' => $profile['id_number'],
+            'file_path'       => $file->store('customer_documents/' . $customerId),
+            'is_verified'     => 0,
+        ]);
+
+        $db->table('customer_accounts')->where('id', (int) $account['id'])->update(['onboarded_at' => date('Y-m-d H:i:s')]);
+
+        $db->transComplete();
+
+        if ($db->transStatus() === false) {
+            return redirect()->back()->withInput()->with('errors', ['form' => 'Gagal menyimpan data. Silakan coba lagi.']);
+        }
+
+        return $this->redirectAfterLogin()->with('success', 'Data profil Anda berhasil disimpan.');
+    }
+
     protected function onboardingSubject(): ?array
     {
         $customerId = session()->get('customer_id');
@@ -596,40 +830,35 @@ public function onboardingForm()
         return ($customer && $account) ? [$customer, $account] : null;
     }
 
-    /**
-     * Saklar bypass OTP. Dipaksa mati di production.
-     */
     protected function isOtpBypassEnabled(): bool
     {
-        return ENVIRONMENT !== 'production'
-            && filter_var(env('otp.bypass', false), FILTER_VALIDATE_BOOLEAN);
+        return ENVIRONMENT !== 'production' && filter_var(env('otp.bypass', false), FILTER_VALIDATE_BOOLEAN);
     }
 
-    /**
-     * Login langsung tanpa OTP: buat/ambil customer + account, bentuk session
-     * persis seperti verifyOtp(), lalu lanjut ke onboarding atau return_url.
-     */
     protected function loginWithoutOtp(string $phone, string $ip, string $userAgent)
     {
         $account = $this->accountModel->findByLoginPhone($phone);
 
         if ($account === null) {
-            $customerId = $this->customerModel->insert([
-                'name' => $phone,
-                'phone' => $phone,
-            ], true);
-
+            $customerId = $this->customerModel->insert(['name' => $phone, 'phone' => $phone], true);
             $accountId = $this->accountModel->insert([
                 'customer_id' => $customerId,
                 'login_phone' => $phone,
-                'status' => CustomerAccountModel::STATUS_PENDING,
+                'status'      => CustomerAccountModel::STATUS_PENDING,
             ], true);
-
             $account = $this->accountModel->find($accountId);
-        }
+                }
 
-        // Akun suspended tetap ditolak, sama seperti alur OTP biasa
         if ($this->accountModel->isSuspended($account)) {
+            if ($this->wantsJson()) {
+                return $this->jsonResponse([
+                    'status'  => 'error',
+                    'code'    => 'account_suspended',
+                    'title'   => 'Akun Dinonaktifkan',
+                    'message' => 'Akun Anda sedang tidak dapat digunakan. Hubungi bantuan pelanggan.',
+                ], 403);
+            }
+
             return redirect()->back()->withInput()
                 ->with('errors', ['phone' => 'Akun Anda sedang tidak dapat digunakan. Hubungi bantuan pelanggan.']);
         }
@@ -638,17 +867,17 @@ public function onboardingForm()
 
         $this->accountModel->update($accountId, [
             'phone_verified_at' => date('Y-m-d H:i:s'),
-            'status' => CustomerAccountModel::STATUS_ACTIVE,
-            'last_login_at' => date('Y-m-d H:i:s'),
-            'last_login_ip' => $ip,
-            'failed_attempts' => 0,
+            'status'            => CustomerAccountModel::STATUS_ACTIVE,
+            'last_login_at'     => date('Y-m-d H:i:s'),
+            'last_login_ip'     => $ip,
+            'failed_attempts'   => 0,
         ]);
 
         session()->regenerate(true);
 
         session()->set([
-            'customer_logged_in' => true,
-            'customer_id' => $account['customer_id'],
+            'customer_logged_in'  => true,
+            'customer_id'         => $account['customer_id'],
             'customer_account_id' => $accountId,
         ]);
         session()->remove(['customer_login_phone', 'customer_login_account_id', 'customer_login_otp_display_expires_at']);
@@ -661,13 +890,24 @@ public function onboardingForm()
             'Login tanpa OTP (bypass sementara)'
         );
 
-        // Akun baru tetap lewat onboarding dulu, return_url masih tersimpan di session
         $freshAccount = $this->accountModel->find($accountId);
-        if (empty($freshAccount['onboarded_at'])) {
-            return redirect()->to(site_url('account/onboarding'));
+        $targetUrl = empty($freshAccount['onboarded_at'])
+            ? site_url('account/onboarding')
+            : site_url(ltrim(session()->get('customer_login_return_url') ?? 'account', '/'));
+
+        session()->remove('customer_login_return_url');
+
+        if ($this->wantsJson()) {
+            return $this->jsonResponse([
+                'status'   => 'success',
+                'code'     => 'login_success',
+                'title'    => 'Login Berhasil',
+                'message'  => 'Mengalihkan ke dashboard...',
+                'redirect' => $targetUrl,
+            ]);
         }
 
-        return $this->redirectAfterLogin();
+        return redirect()->to($targetUrl);
     }
 
     /**
@@ -675,7 +915,7 @@ public function onboardingForm()
      */
     protected function redirectAfterLogin()
     {
-        $returnUrl = session()->get('customer_login_return_url') ?? '/';
+        $returnUrl = session()->get('customer_login_return_url') ?? 'account';
         session()->remove('customer_login_return_url');
 
         return redirect()->to(site_url(ltrim($returnUrl, '/')));

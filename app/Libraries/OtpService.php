@@ -16,8 +16,21 @@ class OtpService
     /** Batas request OTP per IP dalam 1 jam */
     public const MAX_REQUEST_PER_IP_PER_HOUR = 10;
 
+    protected ?string $lastError = null;
+    protected ?array $lastResponse = null;
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
+    public function getLastResponse(): ?array
+    {
+        return $this->lastResponse;
+    }
+
     /**
-     * Generate kode OTP numerik 6 digit.
+     * Generate kode OTP numerik 6 digit menggunakan cryptographically secure random generator.
      */
     public function generateCode(): string
     {
@@ -41,17 +54,17 @@ class OtpService
     }
 
     /**
-     * Kirim OTP via WhatsApp gateway.
-     * Endpoint & token diambil dari system_settings agar bisa diganti tanpa deploy ulang.
-     *
-     * NOTE: sesuaikan implementasi curl di bawah dengan provider WA yang dipakai
-     * (mis. resmi WhatsApp Business API, atau provider pihak ketiga).
+     * Kirim OTP via WhatsApp gateway resmi CV. OTW Computer Gusaha.
      */
-        public function sendViaWhatsapp(string $canonicalPhone, string $code): bool
+    public function sendViaWhatsapp(string $canonicalPhone, string $code): bool
     {
+        $this->lastError = null;
+        $this->lastResponse = null;
+
         $config = config(\Config\Whatsapp::class);
 
         if (empty($config->apiKey) || empty($config->gatewayUrl)) {
+            $this->lastError = 'Konfigurasi WhatsApp gateway belum lengkap di .env.';
             log_message('error', 'OTP WhatsApp: whatsapp.gatewayUrl / whatsapp.apiKey belum diisi di .env.');
             return false;
         }
@@ -89,25 +102,30 @@ class OtpService
         curl_close($ch);
 
         if ($error || $response === false) {
+            $this->lastError = 'Gagal terhubung ke WhatsApp gateway: ' . $error;
             log_message('error', 'Gagal kirim OTP WhatsApp (curl): ' . $error);
             return false;
         }
 
-        // Dicatat dulu supaya kelihatan format respons aslinya saat masa uji
         log_message('info', "OTP WhatsApp: HTTP {$status} - {$response}");
 
+        $json = json_decode($response, true);
+        $this->lastResponse = is_array($json) ? $json : ['raw' => $response];
+
         if ($status < 200 || $status >= 300) {
+            $this->lastError = "WhatsApp gateway mengembalikan status HTTP {$status}";
             log_message('error', "Gagal kirim OTP WhatsApp (HTTP {$status}): {$response}");
             return false;
         }
 
-        $json = json_decode($response, true);
-                if (is_array($json) && (
+        if (is_array($json) && (
             !empty($json['error'])
             || (array_key_exists('ok', $json) && $json['ok'] === false)
             || (array_key_exists('success', $json) && $json['success'] === false)
             || (array_key_exists('status', $json) && $json['status'] === false)
         )) {    
+            $errMsg = $json['message'] ?? $json['error'] ?? 'Provider error';
+            $this->lastError = "Provider WhatsApp menolak pengiriman: {$errMsg}";
             log_message('error', 'Gagal kirim OTP WhatsApp (API): ' . $response);
             return false;
         }
@@ -116,52 +134,134 @@ class OtpService
     }
 
     /**
+     * Validasi dan normalisasi nomor HP sesuai standar:
+     * - Nomor lokal diawali 8
+     * - Panjang nomor lokal (setelah +62 / 0 / 62): 10 - 13 digit
+     * - Mengembalikan status, tipe error, canonical, dan lokal
+     */
+    public function validateAndNormalizePhone(string $rawPhone): array
+    {
+        $trimmed = trim($rawPhone);
+        if ($trimmed === '') {
+            return [
+                'valid'      => false,
+                'error_type' => 'empty',
+                'title'      => 'Nomor Telepon Kosong',
+                'message'    => 'Silakan masukkan nomor WhatsApp Anda.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        // Cek karakter ilegal (hanya angka, +, spasi, strip yang ditoleransi)
+        if (preg_match('/[^0-9+\-\s]/', $trimmed)) {
+            return [
+                'valid'      => false,
+                'error_type' => 'invalid_format',
+                'title'      => 'Format Tidak Valid',
+                'message'    => 'Masukkan nomor telepon dengan format yang benar.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        $clean = preg_replace('/[^\d]/', '', $trimmed);
+        if ($clean === '') {
+            return [
+                'valid'      => false,
+                'error_type' => 'empty',
+                'title'      => 'Nomor Telepon Kosong',
+                'message'    => 'Silakan masukkan nomor WhatsApp Anda.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        // Normalisasi awalan nomor
+        $local = $clean;
+        if (str_starts_with($local, '620')) {
+            $local = substr($local, 3);
+        } elseif (str_starts_with($local, '62')) {
+            $local = substr($local, 2);
+        } elseif (str_starts_with($local, '0')) {
+            $local = substr($local, 1);
+        }
+
+        // Nomor seluler Indonesia harus berawalan angka 8
+        if (!str_starts_with($local, '8')) {
+            return [
+                'valid'      => false,
+                'error_type' => 'invalid_format',
+                'title'      => 'Format Tidak Valid',
+                'message'    => 'Masukkan nomor telepon dengan format yang benar.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        $len = strlen($local);
+        if ($len < 10) {
+            return [
+                'valid'      => false,
+                'error_type' => 'too_short',
+                'title'      => 'Nomor Tidak Lengkap',
+                'message'    => 'Nomor WhatsApp minimal 10 digit.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        if ($len > 13) {
+            return [
+                'valid'      => false,
+                'error_type' => 'too_long',
+                'title'      => 'Nomor Terlalu Panjang',
+                'message'    => 'Nomor WhatsApp maksimal 13 digit.',
+                'canonical'  => null,
+                'local'      => null,
+            ];
+        }
+
+        return [
+            'valid'      => true,
+            'error_type' => null,
+            'title'      => null,
+            'message'    => null,
+            'canonical'  => '+62' . $local,
+            'local'      => $local,
+        ];
+    }
+
+    /**
      * Normalisasi nomor HP ke format canonical +62.
-     * Terima input: 08xxxx, 62xxxx, +62xxxx, dengan/ tanpa spasi/strip.
+     * Mengembalikan +628xxxxxxxxxx jika valid, null jika tidak valid.
      */
     public function normalizePhone(string $rawPhone): ?string
     {
-        $digits = preg_replace('/[^\d]/', '', $rawPhone);
-
-        if ($digits === '') {
-            return null;
-        }
-
-        if (str_starts_with($digits, '620')) {
-            // kasus "62" + "0" di depan nomor lokal, contoh salah ketik
-            $digits = '62' . substr($digits, 3);
-        } elseif (str_starts_with($digits, '0')) {
-            $digits = '62' . substr($digits, 1);
-        } elseif (str_starts_with($digits, '8')) {
-            $digits = '62' . $digits;
-        } elseif (!str_starts_with($digits, '62')) {
-            return null;
-        }
-
-        // Validasi panjang wajar nomor Indonesia: 62 + 9-13 digit
-        if (strlen($digits) < 10 || strlen($digits) > 15) {
-            return null;
-        }
-
-        return '+' . $digits;
+        $res = $this->validateAndNormalizePhone($rawPhone);
+        return $res['valid'] ? $res['canonical'] : null;
     }
 
     /**
      * Samarkan nomor HP untuk ditampilkan ke user, misal:
-     * +6281234567890 -> +6281****890
+     * +6281234567890 -> +62 812-****-7890 (sesuai spesifikasi Bagian G)
      */
     public function maskPhone(string $canonicalPhone): string
     {
-        $len = strlen($canonicalPhone);
-
-        if ($len <= 8) {
-            return substr($canonicalPhone, 0, 3) . str_repeat('*', max(0, $len - 3));
+        $clean = preg_replace('/[^\d]/', '', $canonicalPhone);
+        if (str_starts_with($clean, '62')) {
+            $local = substr($clean, 2);
+        } else {
+            $local = $clean;
         }
 
-        $prefix = substr($canonicalPhone, 0, 5);   // "+6281"
-        $suffix = substr($canonicalPhone, -3);      // 3 digit terakhir
-        $maskedLen = $len - strlen($prefix) - strlen($suffix);
+        $len = strlen($local);
+        if ($len < 7) {
+            return '+62 ' . substr($local, 0, 3) . '****';
+        }
 
-        return $prefix . str_repeat('*', max(3, $maskedLen)) . $suffix;
+        $prefix = substr($local, 0, 3); // misal 812
+        $suffix = substr($local, -4);    // 4 digit terakhir
+        return '+62 ' . $prefix . '-****-' . $suffix;
     }
 }
