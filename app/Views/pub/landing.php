@@ -4,7 +4,13 @@ helper(['image', 'idhash']);
  * @var array $categories
  * @var array $catalogItems
  * @var array $imageMap
+ * @var array $branches
+ * @var string $selectedBranch
  */
+// Hitung query string cabang SEKALI di atas, dipakai berulang di bawah
+$branchQuery = (($selectedBranch ?? 'semua') !== 'semua')
+    ? '?cabang=' . urlencode($selectedBranch)
+    : '';
 ?>
 <?= view('partials/header', ['title' => 'Beranda']) ?>
 
@@ -40,7 +46,7 @@ helper(['image', 'idhash']);
                     );
                     ?>
 
-                    <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>"
+                    <a href="<?= base_url('/item/' . id_encode($item['id'])) . $branchQuery ?>"
                         class="hero-product-card hero-card-<?= $index + 1 ?>">
 
                         <div class="hero-product-image">
@@ -184,11 +190,11 @@ helper(['image', 'idhash']);
             </a>
         </div>
 
-        <!-- ====== TAMBAHAN: FILTER CABANG ====== -->
+        <!-- ====== FILTER CABANG ====== -->
         <div class="branch-filter" style="margin-bottom: 24px; display: flex; gap: 10px; flex-wrap: wrap;">
             <!-- Tombol Semua Cabang -->
             <a href="<?= base_url('/?cabang=semua#produk') ?>"
-                class="btn <?= $selectedBranch === 'semua' ? 'btn-primary' : 'btn-outline' ?>"
+                class="btn <?= ($selectedBranch ?? 'semua') === 'semua' ? 'btn-primary' : 'btn-outline' ?>"
                 style="padding: 8px 16px; border-radius: 99px; font-size: 0.9rem;">
                 Semua Cabang
             </a>
@@ -196,7 +202,7 @@ helper(['image', 'idhash']);
             <!-- Loop Tombol Cabang -->
             <?php foreach ($branches as $branch): ?>
                 <a href="<?= base_url('/?cabang=' . $branch['branch_code'] . '#produk') ?>"
-                    class="btn <?= $selectedBranch === $branch['branch_code'] ? 'btn-primary' : 'btn-outline' ?>"
+                    class="btn <?= ($selectedBranch ?? 'semua') === $branch['branch_code'] ? 'btn-primary' : 'btn-outline' ?>"
                     style="padding: 8px 16px; border-radius: 99px; font-size: 0.9rem;">
                     <?= esc($branch['branch_name']) ?>
                 </a>
@@ -226,9 +232,9 @@ helper(['image', 'idhash']);
                     ?>
 
                     <div class="item-card">
-                        <?php if ($i === 0 && $selectedBranch !== 'semua'): ?>
+                        <?php if ($i === 0 && ($selectedBranch ?? 'semua') !== 'semua'): ?>
                             <span class="item-ribbon">Populer</span>
-                        <?php elseif ($i === 0 && $selectedBranch === 'semua'): ?>
+                        <?php elseif ($i === 0 && ($selectedBranch ?? 'semua') === 'semua'): ?>
                             <!-- Opsional: Sembunyikan ribbon jika 'semua' atau tetap tampilkan -->
                             <span class="item-ribbon">Terbaru</span>
                         <?php endif; ?>
@@ -268,7 +274,7 @@ helper(['image', 'idhash']);
                                 </span>
 
                                 <!-- ====== LOGIKA: SEMBUNYIKAN JIKA 'SEMUA CABANG' ====== -->
-                                <?php if ($selectedBranch !== 'semua' && isset($item['total_booked'])): ?>
+                                <?php if (($selectedBranch ?? 'semua') !== 'semua' && isset($item['total_booked'])): ?>
                                     <span>
                                         <?= number_format((int) $item['total_booked'], 0, ',', '.') ?> kali dipesan
                                     </span>
@@ -285,7 +291,8 @@ helper(['image', 'idhash']);
                                         <?= esc($item['unit_label']) ?>
                                     </small>
                                 </div>
-                                <a href="<?= base_url('/item/' . id_encode($item['id'])) ?>" class="btn btn-outline"
+                                <a href="<?= base_url('/item/' . id_encode($item['id'])) . $branchQuery ?>"
+                                    class="btn btn-outline"
                                     style="padding:8px 14px;font-size:0.85rem;">
                                     Detail
                                 </a>

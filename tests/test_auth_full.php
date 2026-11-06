@@ -87,6 +87,8 @@ try {
     $loginHtml = view('customer/login', ['returnUrl' => '/account']);
     assertTest(strpos($loginHtml, 'glass-auth-card') !== false, "View login mengandung elemen '.glass-auth-card'");
     assertTest(strpos($loginHtml, 'BgMasuk.png') !== false, "View login memuat background 'BgMasuk.png'");
+    assertTest(strpos($loginHtml, 'Solusi Sewa Alat') === false, "Teks slogan 'Solusi Sewa Alat' sudah dihapus dari view login");
+    assertTest(strpos($loginHtml, 'hero-promo-header') === false, "Elemen '.hero-promo-header' sudah dihapus dari HTML");
     assertTest(strpos($loginHtml, 'Kirim Kode OTP') !== false, "View login mengandung tombol 'Kirim Kode OTP'");
     assertTest(strpos($loginHtml, 'phoneInput') !== false, "View login mengandung input 'phoneInput'");
     assertTest(strpos($loginHtml, 'showAuthPopup') !== false, "View login memanggil modal 'showAuthPopup' (bukan browser alert)");

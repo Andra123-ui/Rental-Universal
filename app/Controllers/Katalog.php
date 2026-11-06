@@ -139,7 +139,7 @@ class Katalog extends BaseController
         $relatedIds = array_column($related, 'id');
         $relatedImages = $mediaModel->getPrimaryImageMap($relatedIds);
 
-        // ================= PERBAIKAN: AMBIL DATA CABANG + JUMLAH UNIT =================
+        // ================= AMBIL DATA CABANG + JUMLAH UNIT =================
         // Gunakan SUM(capacity) karena untuk produk QUANTITY (misal Tenda & Kursi),
         // 1 baris resource bisa mewakili N unit (capacity = N).
         $itemBranches = db_connect()->table('resources r')
@@ -160,7 +160,7 @@ class Katalog extends BaseController
             'phone' => $r['phone'] ?? '',
             'total_unit' => (int) $r['total_unit'],
         ], $itemBranches);
-        // =============================================================================
+        // =====================================================================
 
         // Kalender ketersediaan
         $availabilityModel = new \App\Models\AvailabilityModel();
@@ -202,6 +202,22 @@ class Katalog extends BaseController
 
         $bookingCount = $availabilityModel->getBookingCount($id);
 
+        // ================= PRE-SELECTED BRANCH DARI LANDING =================
+        // Jika user datang dari landing yang sudah filter cabang (mis. ?cabang=BR-PST),
+        // otomatis isi dropdown cabang di halaman detail & lock agar tidak berubah.
+        $preSelectedBranch = null;
+        $branchParam = $this->request->getGet('cabang');
+
+        if (!empty($branchParam) && $branchParam !== 'semua') {
+            foreach ($itemBranches as $b) {
+                if (isset($b['code']) && $b['code'] === $branchParam) {
+                    $preSelectedBranch = (int) $b['id'];
+                    break;
+                }
+            }
+        }
+        // ====================================================================
+
         return view('pub/katalog_detail', [
             'item' => $item,
             'category' => $category,
@@ -212,6 +228,8 @@ class Katalog extends BaseController
             'bookingCount' => $bookingCount,
             'itemBranches' => $itemBranches,
             'businessName' => business_name($item['business_id'] ?? null),
+            'preSelectedBranch' => $preSelectedBranch,
+            'preSelectedBranchCode' => $branchParam !== 'semua' ? $branchParam : null,
         ]);
     }
 

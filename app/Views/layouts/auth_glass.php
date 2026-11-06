@@ -78,14 +78,14 @@
 
         /* 2. CENTER CONTENT COLUMN:
            - Posisinya berada di area kosong tengah gambar (antara gedung kiri dan peralatan rental kanan).
-           - Jarak atas (padding-top) disesuaikan agar identitas logo OTW & slogan asli di langit TETAP UTUH.
+           - Jarak atas (padding-top) diturunkan secara proporsional agar identitas logo OTW, nama perusahaan,
+             tulisan RENTAL UNIVERSAL, serta SLOGAN pada background terlihat 100% tanpa tertutupi card.
         */
         .auth-content-container {
             width: 100%;
             max-width: 520px;
             margin: 0 auto;
-            /* Jarak aman di bawah logo OTW: ~23-25vh pada desktop */
-            padding-top: clamp(140px, 23.5vh, 260px);
+            padding-top: clamp(310px, 42vh, 460px);
             padding-bottom: 36px;
             padding-left: 16px;
             padding-right: 16px;
@@ -96,52 +96,7 @@
             z-index: 2;
         }
 
-        /* 3. HEADLINE PROMOSI YANG MENARIK (Sesuai Spesifikasi Bagian 3):
-           - "Solusi Sewa Alat & Perlengkapan"
-           - "Lebih Mudah dan Cepat" (gradasi oranye #FF8A00 hingga #FFB52E)
-           - Font Poppins / Plus Jakarta Sans 800-900, text-shadow halus untuk keterbacaan tinggi.
-        */
-        .hero-promo-header {
-            text-align: center;
-            margin-bottom: clamp(14px, 2vh, 22px);
-            width: 100%;
-            max-width: 540px;
-            padding: 0 8px;
-        }
-
-        .promo-title {
-            font-family: 'Poppins', 'Plus Jakarta Sans', sans-serif;
-            font-weight: 900;
-            font-size: clamp(22px, 2.35vw, 38px);
-            line-height: 1.18;
-            letter-spacing: -0.025em;
-            color: var(--navy-headline);
-            margin: 0;
-            text-shadow: 
-                0 2px 10px rgba(255, 255, 255, 0.95),
-                0 4px 20px rgba(255, 255, 255, 0.85),
-                0 4px 18px rgba(7, 59, 145, 0.15);
-        }
-
-        .promo-title .line-1 {
-            display: block;
-            color: var(--navy-headline);
-        }
-
-        .promo-title .line-2 {
-            display: block;
-            color: var(--deep-navy);
-            margin-top: 3px;
-        }
-
-        .promo-title .text-gradient-orange {
-            background: linear-gradient(90deg, #FF8A00 0%, #FFB52E 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            display: inline-block;
-        }
-
-        /* 4. FORM CARD CONTAINER */
+        /* 3. FORM CARD CONTAINER */
         .auth-card-wrapper {
             width: 100%;
             max-width: 410px;
@@ -549,29 +504,77 @@
         }
 
         /* ========================================================
-           RESPONSIVE DESIGN BREAKPOINTS (Sesuai Spesifikasi Bagian 8)
+           RESPONSIVE DESIGN BREAKPOINTS (Sesuai Spesifikasi)
            ======================================================== */
 
-        /* 1. LAYAR TINGGI TERBATAS / LAPTOP (<= 768px tinggi layar) */
+        /* 1. LAYAR TINGGI TERBATAS / LAPTOP (<= 768px tinggi layar, e.g. 1366x768) */
         @media (max-height: 768px) and (min-width: 768px) {
             .auth-content-container {
-                padding-top: clamp(140px, 21vh, 180px);
-                padding-bottom: 24px;
-            }
-            .hero-promo-header {
-                margin-bottom: 12px;
-            }
-            .promo-title {
-                font-size: clamp(22px, 2vw, 28px);
+                /* Slogan pada background berakhir di Y=278px.
+                   Card diposisikan aman di Y=298px-310px (sekitar 39-40vh) */
+                padding-top: clamp(290px, 39.5vh, 312px);
+                padding-bottom: 18px;
             }
             .glass-auth-card {
-                padding: 22px 24px;
+                padding: 18px 22px;
+                border-radius: 22px;
+            }
+            .auth-icon-badge {
+                width: 40px;
+                height: 40px;
+                border-radius: 12px;
+                margin-bottom: 6px;
+            }
+            .auth-icon-badge svg {
+                width: 20px;
+                height: 20px;
+            }
+            .auth-title {
+                font-size: 1.25rem;
+                margin-bottom: 2px;
             }
             .auth-subtitle {
-                margin-bottom: 12px;
+                font-size: 0.78rem;
+                line-height: 1.35;
+                margin-bottom: 10px;
+            }
+            .form-label-custom {
+                font-size: 0.78rem;
+                margin-bottom: 4px;
+            }
+            .phone-input-group {
+                height: 44px;
+                border-radius: 12px;
             }
             .security-badge-note {
+                font-size: 0.72rem;
+                margin-top: 5px;
                 margin-bottom: 12px;
+            }
+            .btn-gradient-auth {
+                height: 44px;
+                font-size: 0.92rem;
+            }
+            .auth-help-link {
+                margin-top: 10px;
+                font-size: 0.78rem;
+            }
+            .otp-box-digit {
+                width: 38px;
+                height: 44px;
+                font-size: 1.2rem;
+            }
+            .otp-boxes-grid {
+                margin: 8px 0;
+            }
+            .otp-timer-badge {
+                font-size: 0.76rem;
+                padding: 3px 10px;
+                margin-bottom: 10px;
+            }
+            .otp-secondary-actions {
+                margin-top: 10px;
+                font-size: 0.78rem;
             }
         }
 
@@ -581,23 +584,22 @@
                 background-position: center top;
             }
             .auth-content-container {
-                padding-top: clamp(160px, 23vh, 220px);
+                padding-top: clamp(340px, 45vh, 380px);
+                padding-bottom: 20px;
             }
         }
 
         /* 3. TABLET & MOBILE (<= 767.98px) */
         @media (max-width: 767.98px) {
             .auth-content-container {
-                padding-top: max(24px, 15vh);
+                padding-top: clamp(310px, 40vh, 360px);
                 max-width: 94%;
                 padding-left: 12px;
                 padding-right: 12px;
-            }
-            .promo-title {
-                font-size: clamp(20px, 5.8vw, 26px);
+                padding-bottom: 32px;
             }
             .glass-auth-card {
-                padding: 24px 18px;
+                padding: 22px 18px;
                 border-radius: 24px;
             }
             .auth-card-wrapper {
@@ -608,18 +610,18 @@
         /* 4. SMARTPHONE KECIL (<= 480px) */
         @media (max-width: 480px) {
             .auth-content-container {
-                padding-top: max(20px, 13vh);
+                padding-top: clamp(290px, 38vh, 340px);
             }
             .auth-title {
-                font-size: 1.35rem;
+                font-size: 1.25rem;
             }
             .otp-box-digit {
-                width: 38px;
-                height: 44px;
-                font-size: 1.2rem;
+                width: 36px;
+                height: 42px;
+                font-size: 1.15rem;
             }
             .otp-boxes-grid {
-                gap: 6px;
+                gap: 5px;
             }
         }
     </style>
@@ -628,14 +630,6 @@
 
     <main class="auth-viewport">
         <div class="auth-content-container">
-            <!-- Headline Promosi Sesuai Spesifikasi Bagian 3 -->
-            <div class="hero-promo-header">
-                <h1 class="promo-title">
-                    <span class="line-1">Solusi Sewa Alat &amp; Perlengkapan</span>
-                    <span class="line-2">Lebih <span class="text-gradient-orange">Mudah dan Cepat</span></span>
-                </h1>
-            </div>
-
             <!-- Kartu Glassmorphism Form Login / Verify -->
             <div class="auth-card-wrapper">
                 <?= $this->renderSection('content') ?>

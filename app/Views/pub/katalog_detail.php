@@ -6,9 +6,18 @@ helper(['image', 'idhash']);
  * @var array $related
  * @var array $gallery
  * @var array $relatedImages
+ * @var array $itemBranches
+ * @var array $calendarData
+ * @var int $bookingCount
+ * @var string|null $businessName
+ * @var int|null $preSelectedBranch
+ * @var string|null $preSelectedBranchCode
  */
 $unit = $item['unit_label'];
 $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' . $item['id']) : item_image_url(null, 'item-' . $item['id']);
+
+// Query string yang perlu diteruskan ke link "Produk sejenis"
+$branchQuery = !empty($preSelectedBranchCode) ? '?cabang=' . urlencode($preSelectedBranchCode) : '';
 ?>
 <?= view('partials/header', ['title' => $item['name']]) ?>
 
@@ -115,7 +124,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <select id="branch-select" class="branch-select" required>
                         <option value="" disabled selected>-- Pilih cabang dulu --</option>
                         <?php foreach ($itemBranches as $b): ?>
-                        <option value="<?= (int) $b['id'] ?>">
+                        <option value="<?= (int) $b['id'] ?>"
+                            <?= (!empty($preSelectedBranch) && (int) $preSelectedBranch === (int) $b['id']) ? 'selected' : '' ?>>
                             <?= esc($b['name']) ?> (<?= (int) $b['total_unit'] ?> unit tersedia)
                         </option>
                         <?php endforeach; ?>
@@ -146,7 +156,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                     <input type="hidden" name="catalog_item_id" value="<?= esc($item['id']) ?>">
                     <input type="hidden" name="start_at" id="input_start_at">
                     <input type="hidden" name="qty" value="1">
-                    <input type="hidden" name="branch_id" id="input_branch_id" value="">
+                    <input type="hidden" name="branch_id" id="input_branch_id" value="<?= $preSelectedBranch ? (int) $preSelectedBranch : '' ?>">
                     <input type="hidden" name="end_at" id="input_end_at">
                     <?= csrf_field() ?>
 
@@ -194,8 +204,8 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
                                 <?= esc($ru) ?>
                             </small>
                         </div>
-                        <a href="<?= base_url('/item/' . id_encode($r['id'])) ?>" class="btn btn-outline"
-                            style="padding:8px 14px;font-size:0.85rem;">Detail</a>
+                        <a href="<?= base_url('/item/' . id_encode($r['id'])) . $branchQuery ?>"
+                            class="btn btn-outline" style="padding:8px 14px;font-size:0.85rem;">Detail</a>
                     </div>
                 </div>
             </div>
@@ -256,6 +266,31 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     border-radius: 8px;
     font-size: .92rem;
     background: #fff;
+    transition: background .15s, border-color .15s;
+}
+
+/* ==== State locked: cabang terkunci dari landing ==== */
+.branch-select.locked {
+    background: #f1f5f9;
+    color: #475569;
+    cursor: not-allowed;
+    border-style: dashed;
+}
+
+.branch-lock-hint {
+    margin-top: 6px;
+    font-size: .78rem;
+    color: #475569;
+    background: #f1f5f9;
+    padding: 6px 10px;
+    border-radius: 6px;
+    line-height: 1.4;
+}
+
+.branch-lock-hint a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: underline;
 }
 
 .branch-note {
@@ -490,6 +525,11 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 (function() {
     const CALENDAR_DATA = <?= json_encode($calendarData, JSON_HEX_TAG | JSON_HEX_AMP) ?>;
     const BRANCHES = <?= json_encode($itemBranches ?? [], JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+    // ==== Cabang pre-selected dari landing (?cabang=BR-XXX) ====
+    const PRE_SELECTED_BRANCH = <?= json_encode($preSelectedBranch ?? null) ?>;
+    const PRE_SELECTED_LOCKED = PRE_SELECTED_BRANCH !== null;
+
     const dowNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
     const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September',
         'Oktober', 'November', 'Desember'
@@ -534,6 +574,11 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     let selStart = null,
         selEnd = null;
     let selBranch = '';
+
+    // ==== Auto-set cabang dari landing ====
+    if (PRE_SELECTED_LOCKED) {
+        selBranch = String(PRE_SELECTED_BRANCH);
+    }
 
     const dowEl = document.getElementById('cal-dow');
     dowNames.forEach(n => {
@@ -601,7 +646,7 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
             const cellDate = new Date(viewYear, viewMonth - 1, d);
             cellDate.setHours(0, 0, 0, 0);
             const info = getInfo(dateKey);
-            const el = document.createElement('div');
+                    const el = document.createElement('div');
             el.className = 'cal-day';
 
             if (cellDate < today) {
@@ -818,7 +863,42 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
     }
 
     if (branchSelect) {
+        // ==== Kunci dropdown jika cabang sudah dipilih dari landing ====
+        if (PRE_SELECTED_LOCKED) {
+            branchSelect.value = selBranch;
+            branchSelect.disabled = true;
+            branchSelect.classList.add('locked');
+            if (branchInput) branchInput.value = selBranch;
+
+            const hint = document.createElement('div');
+            hint.className = 'branch-lock-hint';
+            hint.innerHTML = '🔒 Cabang terkunci sesuai pilihan Anda di beranda. ' +
+                '<a href="#" id="unlock-branch">Ganti cabang?</a>';
+            branchSelect.parentNode.appendChild(hint);
+
+            document.getElementById('unlock-branch').addEventListener('click', (e) => {
+                e.preventDefault();
+                branchSelect.disabled = false;
+                branchSelect.classList.remove('locked');
+                hint.remove();
+                selBranch = '';
+                branchSelect.value = '';
+                if (branchInput) branchInput.value = '';
+                selStart = null;
+                selEnd = null;
+                document.getElementById('input_start_at').value = '';
+                document.getElementById('input_end_at').value = '';
+                updateBranchNote();
+                updateSelectionUI();
+                renderCalendar();
+            });
+
+            // Sync catatan cabang saat pertama load
+            updateBranchNote();
+        }
+
         branchSelect.addEventListener('change', () => {
+            if (branchSelect.disabled) return;
             selBranch = branchSelect.value;
             if (branchInput) branchInput.value = selBranch;
             selStart = null;
@@ -855,4 +935,4 @@ $mainImg = !empty($gallery) ? item_image_url($gallery[0]['file_path'], 'item-' .
 })();
 </script>
 
-<?= view('partials/footer') ?>
+<?= view('partials/footer') ?> 

@@ -120,7 +120,7 @@ class BookingController extends BaseController
             return $this->back('error', "Booking {$bk['invoice_no']} berstatus {$bk['status']}; hanya PENDING yang bisa dikonfirmasi.");
         }
         if ($this->activeAllocations((int) $bk['id']) === 0) {
-            return $this->back('error', "Alokasi unit untuk {$bk['invoice_no']} sudah dilepas, jadi tidak bisa dikonfirmasi. Buat booking baru setelah cek ketersediaan.");
+            return $this->back('error', "Alokasi unit untuk {$bk['invoice_no']} sudah dilepas, jadi tidak bisa dikonfirmasi. Buat booking baru setelah.");
         }
 
         $this->conn->transBegin();
