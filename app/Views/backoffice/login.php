@@ -88,6 +88,41 @@
         box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
     }
 
+    /* Styling untuk Remember Me */
+    .remember-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        font-size: .85rem;
+    }
+
+    .remember-row label {
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        font-weight: 400;
+        color: var(--ink);
+    }
+
+    .remember-row input[type="checkbox"] {
+        width: auto;
+        height: auto;
+        margin-right: 8px;
+        accent-color: var(--accent);
+    }
+
+    .forgot-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .forgot-link:hover {
+        text-decoration: underline;
+    }
+
     button {
         width: 100%;
         height: 46px;
@@ -139,6 +174,7 @@
         <h1>Backoffice</h1>
         <p class="sub">Masuk dengan username dan password admin.</p>
 
+        <!-- Flash Messages -->
         <?php if (session()->getFlashdata('error')): ?>
         <div class="alert alert-error"><?= esc(session()->getFlashdata('error')) ?></div>
         <?php endif; ?>
@@ -148,15 +184,28 @@
 
         <form action="<?= site_url('backoffice/login') ?>" method="post" id="boLogin">
             <?= csrf_field() ?>
+
+            <!-- Field Username -->
             <div class="field">
-                <label for="username">Username</label>
+                <label for="username">Username / Email</label>
                 <input type="text" id="username" name="username" value="<?= esc(old('username'), 'attr') ?>"
                     autocomplete="username" required autofocus>
             </div>
+
+            <!-- Field Password -->
             <div class="field">
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" autocomplete="current-password" required>
             </div>
+
+            <!-- Remember Me & Forgot Password -->
+            <div class="remember-row">
+                <label>
+                    <input type="checkbox" name="remember" value="1"> Ingat Saya
+                </label>
+                <a href="<?= site_url('backoffice/forgot-password') ?>" class="forgot-link">Lupa Password?</a>
+            </div>
+
             <button type="submit" id="boBtn">Masuk</button>
         </form>
 
@@ -164,6 +213,7 @@
     </div>
 
     <script>
+    // Script untuk mencegah double submit
     document.getElementById('boLogin').addEventListener('submit', function() {
         const b = document.getElementById('boBtn');
         b.textContent = 'Memproses...';

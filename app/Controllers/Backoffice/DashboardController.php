@@ -327,8 +327,11 @@ class DashboardController extends BaseController
         return $s . ' – ' . $e;
     }
 
-    private function has(string $uri): bool
+        private function has(string $uri): bool
     {
+        // CodeIgniter menyimpan placeholder sebagai regex: (:segment) -> ([^/]+)
+        $uri = str_replace('(:segment)', '([^/]+)', $uri);
+
         if (!$this->routeKeys) {
             try {
                 $this->routeKeys = array_keys(service('routes')->getRoutes('get'));

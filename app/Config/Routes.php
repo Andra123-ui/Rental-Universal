@@ -195,14 +195,43 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
 
     $routes->get('customer-photo/(:num)', 'CustomerVerification::profilePhoto/$1', ['filter' => 'backofficeAuth:customer.verify']);
 
-    // Booking backoffice
-    $routes->group('bookings', ['filter' => 'backofficeAuth:booking.view'], static function ($routes) {
-        $routes->get('/', 'BookingController::index');
-    });
-    $routes->group('bookings', ['filter' => 'backofficeAuth:booking.manage'], static function ($routes) {
-        $routes->get('export', 'BookingController::export');
-        $routes->post('(:segment)/confirm', 'BookingController::confirm/$1');
-        $routes->post('(:segment)/cancel', 'BookingController::cancel/$1');
+        // Booking backoffice: BOOK-01 s/d BOOK-04
+    // Route literal HARUS sebelum '(:segment)'.
+    $routes->group('bookings', static function ($routes) {
+        $view   = ['filter' => 'backofficeAuth:booking.view'];
+        $manage = ['filter' => 'backofficeAuth:booking.manage'];
+        $create = ['filter' => 'backofficeAuth:booking.create,booking.manage'];
+        $update = ['filter' => 'backofficeAuth:booking.update,booking.manage'];
+
+        $routes->get('export', 'BookingController::export', $manage);
+
+        // BOOK-03
+        $routes->get('baru', 'BookingCreateController::create', $create);
+        $routes->get('check', 'BookingCreateController::check', $create);
+        $routes->get('customers', 'BookingCreateController::customers', $create);
+        $routes->post('simpan', 'BookingCreateController::store', $create);
+
+        // BOOK-01 / BOOK-02
+        $routes->get('/', 'BookingController::index', $view);
+        $routes->get('(:segment)', 'BookingDetailController::show/$1', $view);
+        $routes->get('(:segment)/invoice', 'BookingDetailController::invoice/$1', $view);
+
+        // BOOK-04
+        $routes->get('(:segment)/ubah', 'BookingEditController::edit/$1', $update);
+        $routes->get('(:segment)/ubah/check', 'BookingEditController::check/$1', $update);
+        $routes->post('(:segment)/ubah', 'BookingEditController::update/$1', $update);
+
+        $routes->post('(:segment)/confirm', 'BookingController::confirm/$1', $manage);
+        $routes->post('(:segment)/cancel', 'BookingController::cancel/$1', $manage);
+        $routes->post('(:segment)/payment', 'BookingDetailController::payment/$1', $manage);
+        $routes->post('(:segment)/payment/(:segment)/verify', 'BookingDetailController::verifyPayment/$1/$2', $manage);
+        $routes->post('(:segment)/payment/(:segment)/reject', 'BookingDetailController::rejectPayment/$1/$2', $manage);
+        $routes->post('(:segment)/charge', 'BookingDetailController::charge/$1', $manage);
+        $routes->post('(:segment)/charge/(:segment)/void', 'BookingDetailController::voidCharge/$1/$2', $manage);
+        $routes->post('(:segment)/assign', 'BookingDetailController::assign/$1', $manage);
+        $routes->post('(:segment)/assign/(:segment)/cancel', 'BookingDetailController::cancelAssign/$1/$2', $manage);
+        $routes->post('(:segment)/handover', 'BookingDetailController::handover/$1', $manage);
+        $routes->post('(:segment)/note', 'BookingDetailController::note/$1', $manage);
     });
 });
 
