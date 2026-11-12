@@ -29,8 +29,6 @@ $branchQuery = (($selectedBranch ?? 'semua') !== 'semua')
                 </div>
             </div>
 
-            <?php helper(['image', 'idhash']); ?>
-
             <div class="hero-art">
 
                 <?php
@@ -157,9 +155,16 @@ $branchQuery = (($selectedBranch ?? 'semua') !== 'semua')
                 </div>
             <?php else: ?>
                 <?php foreach ($categories as $cat): ?>
+                    <?php
+                    // Cek apakah ada gambar di database, jika ada gunakan dari folder uploads
+                    // Jika tidak ada, gunakan fungsi bawaan (category_image_url)
+                    $catImageUrl = !empty($cat['image'])
+                        ? base_url('uploads/catalog/' . $cat['image'])
+                        : category_image_url($cat['slug']);
+                    ?>
                     <div class="cat-card">
                         <div class="cat-card-img"
-                            style="background-image:url('<?= esc(category_image_url($cat['slug'])) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
+                            style="background-image:url('<?= esc($catImageUrl) ?>');height:150px;border-radius:4px 4px 0 0;background-size:cover;background-position:center;margin:-26px -26px 16px;">
                         </div>
                         <h3>
                             <?= esc($cat['name']) ?>
@@ -292,8 +297,7 @@ $branchQuery = (($selectedBranch ?? 'semua') !== 'semua')
                                     </small>
                                 </div>
                                 <a href="<?= base_url('/item/' . id_encode($item['id'])) . $branchQuery ?>"
-                                    class="btn btn-outline"
-                                    style="padding:8px 14px;font-size:0.85rem;">
+                                    class="btn btn-outline" style="padding:8px 14px;font-size:0.85rem;">
                                     Detail
                                 </a>
                             </div>
