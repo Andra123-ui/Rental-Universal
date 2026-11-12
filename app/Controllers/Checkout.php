@@ -16,14 +16,89 @@ class Checkout extends BaseController
     protected const CHECKOUT_KEY = 'checkout_data';
     protected const PAYMENT_WINDOW_MINUTES = 3;
     protected const COOLDOWN_SECONDS = 120;
+    protected const BUY_NOW_KEY = 'buy_now_cart';
     protected $helpers = ['business'];
+
+    /**
+ * Keranjang aktif: item "beli langsung" kalau ada, kalau tidak keranjang biasa.
+ */
+private function getCart(): array
+{
+    $buyNow = session()->get(self::BUY_NOW_KEY);
+    if (!empty($buyNow)) {
+        return $buyNow;
+    }
+    return session()->get(self::CART_KEY) ?? [];
+}
+
+/**
+ * Tombol Checkout di halaman detail item: tanpa masuk keranjang.
+ */
+public function langsung()
+{
+    if (!$this->request->is('post')) {
+        return redirect()->to('/catalog');
+    }
+
+    $itemId   = (int) $this->request->getPost('catalog_item_id');
+    $branchId = (int) $this->request->getPost('branch_id') ?: null;
+    $qty      = max(1, (int) $this->request->getPost('qty'));
+    $startAt  = (string) $this->request->getPost('start_at');
+    $endAt    = (string) $this->request->getPost('end_at');
+
+    if (!$itemId || strtotime($startAt) === false || strtotime($endAt) === false || strtotime($endAt) <= strtotime($startAt)) {
+        return redirect()->back()->with('error', 'Pilih cabang dan tanggal sewa terlebih dahulu.');
+    }
+
+    $product = (new CatalogItemModel())->find($itemId);
+    if (!$product) {
+        return redirect()->to('/catalog')->with('error', 'Item tidak ditemukan.');
+    }
+
+    $avail = (new \App\Models\AvailabilityModel())
+        ->checkAvailability($itemId, $branchId, $startAt, $endAt, $qty);
+
+    if (($avail['status'] ?? '') === 'unavailable') {
+    return redirect()->back()->with('error', $avail['message'] ?? 'Item tidak tersedia pada jadwal yang dipilih.');
+    }
+    if (($avail['status'] ?? '') === 'limited' && $qty > $avail['available_units']) {
+    $sisa = (int) floor($avail['available_units']);
+    return redirect()->back()->with('error', "Stok tidak mencukupi. Tersisa {$sisa} unit untuk jadwal ini.");
+    }
+
+    $branch = $branchId
+        ? \Config\Database::connect()->table('branches')->where('id', $branchId)->get()->getRowArray()
+        : null;
+
+    $key = $itemId . '_' . md5($branchId . $startAt . $endAt);
+
+    session()->set(self::BUY_NOW_KEY, [
+        $key => [
+            'catalog_item_id' => $itemId,
+            'qty'             => $qty,
+            'branch_id'       => $branchId,
+            'start_at'        => $startAt,
+            'end_at'          => $endAt,
+            'branch_name'     => $branch['name'] ?? null,
+            'branch_address'  => $branch['address'] ?? null,
+            'branch_phone'    => $branch['phone'] ?? null,
+        ],
+    ]);
+
+    // Buang pilihan fulfillment lama supaya tidak bentrok dengan item baru
+    $co = session()->get(self::CHECKOUT_KEY) ?? [];
+    unset($co['fulfillment_items']);
+    session()->set(self::CHECKOUT_KEY, $co);
+
+    return redirect()->to('/checkout');
+}
 
     /**
      * PUB-07: Form Data Penyewa
      */
     public function index()
     {
-        $cart = session()->get(self::CART_KEY) ?? [];
+        $cart = $this->getCart();
         if (empty($cart)) {
             return redirect()->to('/cart')->with('error', 'Keranjang Anda masih kosong.');
         }
@@ -51,6 +126,10 @@ class Checkout extends BaseController
                 'Nama, nomor HP, dan persetujuan syarat & ketentuan wajib diisi/dicentang.',
             ]);
         }
+
+        if ((new \App\Libraries\OtpService())->normalizePhone((string) $this->request->getPost('phone')) === null) {
+    return redirect()->back()->withInput()->with('errors', ['Format nomor HP tidak valid. Gunakan format 08xxxxxxxxxx.']);
+}
 
         $wait = $this->cooldownRemaining((string) $this->request->getPost('phone'));
         if ($wait > 0) {
@@ -88,7 +167,7 @@ class Checkout extends BaseController
             return redirect()->to('/checkout')->with('error', 'Lengkapi data penyewa terlebih dahulu.');
         }
 
-        $cart = session()->get(self::CART_KEY) ?? [];
+        $cart = $this->getCart();
         if (empty($cart)) {
             return redirect()->to('/cart')->with('error', 'Keranjang Anda kosong.');
         }
@@ -185,7 +264,7 @@ class Checkout extends BaseController
 
         helper('business');
 
-        $cart = session()->get(self::CART_KEY) ?? [];
+        $cart = $this->getCart();
         $catalogModel = new CatalogItemModel();
         $availabilityModel = new \App\Models\AvailabilityModel();
         $items = [];
@@ -249,7 +328,7 @@ class Checkout extends BaseController
     public function proses()
     {
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
-        $cart = session()->get(self::CART_KEY) ?? [];
+        $cart = $this->getCart();
 
         if (empty($checkoutData['customer']) || empty($checkoutData['fulfillment_items']) || empty($cart)) {
             return redirect()->to('/cart')->with('error', 'Data booking tidak lengkap. Silakan ulangi.');
@@ -317,7 +396,8 @@ class Checkout extends BaseController
                     (int) $line['qty']
                 );
 
-                if ($availCheck['status'] !== 'available') {
+                if ($availCheck['status'] === 'unavailable'
+                || ($availCheck['status'] === 'limited' && (int) $line['qty'] > $availCheck['available_units'])) {
                     throw new DatabaseException("Item '{$product['name']}': " . ($availCheck['message'] ?? 'sudah tidak tersedia pada jadwal yang dipilih.'));
                 }
 
@@ -460,7 +540,11 @@ class Checkout extends BaseController
                 throw new DatabaseException('Gagal menyimpan booking. Silakan coba lagi.');
             }
 
+            if (!empty(session()->get(self::BUY_NOW_KEY))) {
+            session()->remove(self::BUY_NOW_KEY);      // beli langsung: keranjang tetap utuh
+            } else {
             session()->remove(self::CART_KEY);
+            }
             session()->remove(self::CHECKOUT_KEY);
 
             session()->set('last_invoice', $invoiceNo);
@@ -509,29 +593,37 @@ class Checkout extends BaseController
     }
 
     private function cooldownRemaining(string $phone): int
-    {
-        $phone = $this->normalizePhone($phone);
-        (new \App\Models\AvailabilityModel())->expireStaleBookings();
+{
+    (new \App\Models\AvailabilityModel())->expireStaleBookings();
 
-        $customer = (new CustomerModel())->where('phone', $phone)->first();
+    // Customer login: cooldown ikut akun, bukan nomor yang diketik
+    if (session()->get('customer_logged_in') && session()->get('customer_id')) {
+        $customerId = (int) session()->get('customer_id');
+    } else {
+        $customer = (new CustomerModel())
+            ->where('phone', $this->normalizePhone($phone))
+            ->first();
+
         if (!$customer) {
             return 0;
         }
-
-        $last = \Config\Database::connect()->table('bookings')
-            ->select('expires_at')
-            ->where('customer_id', $customer['id'])
-            ->where('status', 'EXPIRED')
-            ->where('expires_at IS NOT NULL')
-            ->orderBy('expires_at', 'DESC')
-            ->limit(1)
-            ->get()
-            ->getRowArray();
-
-        if (!$last) {
-            return 0;
-        }
-
-        return max(0, strtotime($last['expires_at']) + self::COOLDOWN_SECONDS - time());
+        $customerId = (int) $customer['id'];
     }
+
+    $last = \Config\Database::connect()->table('bookings')
+        ->select('expires_at')
+        ->where('customer_id', $customerId)
+        ->where('status', 'EXPIRED')
+        ->where('expires_at IS NOT NULL')
+        ->orderBy('expires_at', 'DESC')
+        ->limit(1)
+        ->get()
+        ->getRowArray();
+
+    if (!$last) {
+        return 0;
+    }
+
+    return max(0, strtotime($last['expires_at']) + self::COOLDOWN_SECONDS - time());
+}
 }

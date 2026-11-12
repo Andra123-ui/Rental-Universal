@@ -74,20 +74,84 @@ $jsData  = json_encode([
     background: var(--paper);
 }
 
-.item-table input,
-.item-table select {
-    height: 38px;
-    padding: 0 8px;
-    font-size: .86rem;
+/* Perbaikan Tabel Item */
+.table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 15px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.item-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1050px;
+    /* Diperlebar agar tidak menjepit input */
+}
+
+.item-table th {
+    background: var(--paper);
+    padding: 12px 10px;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
 }
 
 .item-table td {
+    padding: 12px 10px;
     vertical-align: top;
+    border-bottom: 1px solid var(--line);
+}
+
+.item-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Memaksa input agar tidak terlalu kecil */
+.item-table input,
+.item-table select {
+    width: 100%;
+    height: 42px;
+    padding: 0 10px;
+    font-size: 0.88rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+/* Khusus input angka, beri ruang lebih agar angka tidak terpotong */
+.item-table input[type="number"] {
+    min-width: 85px;
+}
+
+/* Hilangkan spinner panah pada input number agar lebih bersih */
+.item-table input[type=number]::-webkit-inner-spin-button,
+.item-table input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.item-table input[type=number] {
+    -moz-appearance: textfield;
+}
+
+.item-table input:focus,
+.item-table select:focus {
+    border-color: var(--primary);
+    outline: none;
 }
 
 .res-cell {
-    min-width: 240px;
-    font-size: .82rem;
+    min-width: 200px;
+    font-size: 0.82rem;
+    padding-top: 14px !important;
 }
 
 .res-ok {
@@ -246,14 +310,18 @@ $jsData  = json_encode([
             <table class="item-table">
                 <thead>
                     <tr>
-                        <th style="min-width:200px;">Item</th>
-                        <th style="min-width:170px;">Unit</th>
-                        <th style="min-width:150px;">Mulai</th>
-                        <th style="min-width:150px;">Selesai</th>
-                        <th style="width:80px;">Qty</th>
-                        <?php if ($canOverride): ?><th style="width:130px;">Harga satuan manual</th><?php endif; ?>
-                        <th>Hasil pemeriksaan</th>
-                        <th></th>
+                        <th style="width: 20%;">Item</th>
+                        <th style="width: 15%;">Unit</th>
+                        <th style="width: 14%;">Mulai</th>
+                        <th style="width: 14%;">Selesai</th>
+                        <!-- Beri ruang lebih untuk Qty -->
+                        <th style="width: 8%; min-width: 80px; text-align: center;">Qty</th>
+                        <?php if ($canOverride): ?>
+                        <!-- Beri ruang lebih untuk Harga Manual -->
+                        <th style="width: 12%; min-width: 120px;">Harga Manual</th>
+                        <?php endif; ?>
+                        <th style="min-width: 200px;">Hasil Pemeriksaan</th>
+                        <th style="width: 40px;"></th>
                     </tr>
                 </thead>
                 <tbody id="itemRows"></tbody>
@@ -299,7 +367,7 @@ $jsData  = json_encode([
         </div>
 
         <div class="btn-row">
-            <button type="button" class="btn btn-ghost" data-save="PENDING">Simpan pending</button>
+            <button type="button" class="btn btn-ghost" id="btnSavePending" data-save="PENDING">Simpan pending</button>
             <button type="button" class="btn btn-primary" data-save="CONFIRMED">Simpan &amp; confirm</button>
             <a href="<?= site_url('backoffice/bookings') ?>" class="btn btn-ghost">Batal</a>
         </div>
@@ -594,7 +662,10 @@ $jsData  = json_encode([
         tr.appendChild(el('td', {}, [resSel]));
         tr.appendChild(el('td', {}, [startIn]));
         tr.appendChild(el('td', {}, [endIn]));
-        tr.appendChild(el('td', {}, [qtyIn]));
+        // Tambahkan text-align center agar sejajar dengan header
+        tr.appendChild(el('td', {
+            style: 'text-align: center;'
+        }, [qtyIn]));
         if (ovIn) {
             tr.appendChild(el('td', {}, [ovIn]));
         }
@@ -887,6 +958,29 @@ $jsData  = json_encode([
     }
     applyMode();
     applyFulfillment();
+
+    // ---------------- Sembunyikan tombol Pending jika BUKAN Admin / WA ----------------
+    var sourceSel = document.getElementById('source');
+    var btnSavePending = document.getElementById('btnSavePending');
+
+    function toggleSaveButtons() {
+        if (!sourceSel || !btnSavePending) return;
+
+        // Cek apakah sumber yang dipilih BUKAN ADMIN
+        if (sourceSel.value !== 'ADMIN') {
+            // Sembunyikan tombol pending karena Walk-in/Telepon tidak boleh pending
+            btnSavePending.style.display = 'none';
+        } else {
+            // Tampilkan kembali jika memilih Admin / WhatsApp
+            btnSavePending.style.display = 'inline-block';
+        }
+    }
+
+    // Jalankan saat halaman dimuat & saat dropdown diubah
+    if (sourceSel && btnSavePending) {
+        sourceSel.addEventListener('change', toggleSaveButtons);
+        toggleSaveButtons(); // Panggil saat pertama kali load (antisipasi form gagal simpan/prefill)
+    }
 })();
 </script>
 

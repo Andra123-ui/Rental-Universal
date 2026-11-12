@@ -58,11 +58,13 @@ $isLoggedIn = !empty($loggedCustomer);
                             value="<?= esc(old('name', $loggedCustomer['name'])) ?>">
                     </div>
                     <div class="field-group">
-                        <label for="phone">Nomor HP</label>
-                        <input type="tel" id="phone" name="phone" value="<?= esc($loggedCustomer['phone']) ?>" readonly
-                            style="background:var(--paper);color:var(--muted);">
-                        <p style="font-size:0.78rem;color:var(--muted);margin-top:4px;">Nomor HP terverifikasi, tidak
-                            dapat diubah di sini.</p>
+                        <label for="phone">Nomor HP (WhatsApp aktif) <span style="color:#B91C1C;">*</span></label>
+                        <input type="tel" id="phone" name="phone" required minlength="9" placeholder="08xxxxxxxxxx"
+                            value="<?= esc(old('phone', $loggedCustomer['phone'])) ?>">
+                        <p style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+                            Nomor ini dipakai untuk menghubungi Anda terkait booking ini. Nomor login akun tidak ikut
+                            berubah.
+                        </p>
                     </div>
                     <div class="field-group">
                         <label for="email">Email (opsional)</label>

@@ -163,8 +163,8 @@ class BookingCreateController extends BaseController
             return $this->failBack($post, 'Terjadi kesalahan saat menyimpan booking. Coba lagi.');
         }
 
-        $redirect = redirect()->to(site_url('backoffice/bookings/' . id_encode($result['id'])))
-            ->with('success', "Booking {$result['invoice']} dibuat ({$action}).");
+            $redirect = redirect()->to(site_url('backoffice/bookings/' . id_encode($result['id'])) . '?tab=payments')
+            ->with('success', "Booking {$result['invoice']} dibuat ({$action}). Silakan catat pembayaran jika customer sudah membayar.");
 
         if ($result['invite']) {
             $redirect->with('invite', $result['invite']);

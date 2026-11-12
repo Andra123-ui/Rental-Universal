@@ -32,6 +32,7 @@ $routes->get('/cart/hapus/(:segment)', 'Cart::hapus/$1');
 // =====================================================
 
 $routes->get('/checkout', 'Checkout::index', ['filter' => 'customerAuth']);
+$routes->post('/checkout/langsung', 'Checkout::langsung', ['filter' => 'customerAuth']);
 $routes->post('/checkout/simpan-customer', 'Checkout::simpanCustomer', ['filter' => 'customerAuth']);
 
 $routes->get('/checkout/fulfillment', 'Checkout::fulfillment', ['filter' => 'customerAuth']);
@@ -60,10 +61,9 @@ $routes->get('/help', 'Help::index');
 // TRACKING & PAYMENT
 // =====================================================
 
-$routes->get('/track/(:segment)', 'Tracking::index/$1');
-
-$routes->get('/track/(:segment)/payment', 'Payment::index/$1');
-$routes->post('/track/(:segment)/payment/process', 'Payment::process/$1');
+$routes->get('/track/(:segment)', 'Tracking::index/$1', ['filter' => 'customerAuth']);
+$routes->get('/track/(:segment)/payment', 'Payment::index/$1', ['filter' => 'customerAuth']);
+$routes->post('/track/(:segment)/payment/process', 'Payment::process/$1', ['filter' => 'customerAuth']);
 
 // =====================================================
 // CUSTOMER PORTAL & AUTH (OTP WhatsApp)

@@ -87,6 +87,26 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     dikembalikan. Catat refund di tab Pembayaran.</div>
 <?php endif; ?>
 
+<?php if ($bk['status'] === 'CANCELLED' && (float) $bk['paid_total'] > 0): ?>
+<div class="alert alert-error">Booking dibatalkan tetapi pembayaran <?= esc($rp($bk['paid_total'])) ?> belum
+    dikembalikan. Catat refund di tab Pembayaran.</div>
+<?php endif; ?>
+
+<?php if (!$closedStatus && (float) $bk['balance_due'] > 0 && $can['pay'] && (float) $bk['paid_total'] <= 0): ?>
+<div class="alert alert-warning"
+    style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+        <strong>Belum ada pembayaran tercatat.</strong>
+        Sisa tagihan <strong><?= esc($rp($bk['balance_due'])) ?></strong>.
+        Catat pembayaran customer di tab <em>Pembayaran</em>.
+    </div>
+    <button type="button" class="btn btn-primary btn-sm"
+        onclick="document.querySelector('[data-tab=payments]').click()">
+        Catat pembayaran
+    </button>
+</div>
+<?php endif; ?>
+
 <!-- ============ Ringkasan ============ -->
 <div class="detail-grid">
 
@@ -241,7 +261,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                         <td><?= esc($a['item_name_snapshot']) ?></td>
                         <td><?= esc($a['resource_name'] ?? '-') ?> <span
                                 class="muted"><?= esc($a['resource_code'] ?? '') ?></span></td>
-                        <td><?= esc($dt($a['start_at'])) ?> <span class="muted">s/d <?= esc($dt($a['end_at'])) ?></span>
+                        <td><?= esc($dt($a['start_at'])) ?> <span class="muted">s/d
+                                <?= esc($dt($a['end_at'])) ?></span>
                         </td>
                         <td><span
                                 class="badge <?= esc($badge($a['allocation_status']), 'attr') ?>"><?= esc($a['allocation_status']) ?></span>
@@ -257,7 +278,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     <!-- ---------- Pembayaran ---------- -->
     <section data-pane="payments">
         <?php if ($legacyPaid): ?>
-        <div class="alert alert-success">Pembayaran <?= esc($rp($bk['paid_total'])) ?> tercatat di booking, tetapi belum
+        <div class="alert alert-success">Pembayaran <?= esc($rp($bk['paid_total'])) ?> tercatat di booking, tetapi
+            belum
             punya riwayat transaksi. Riwayatnya dibuat otomatis saat pembayaran atau biaya pertama dicatat.</div>
         <?php endif; ?>
 
@@ -364,7 +386,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                         <td><?= esc($p['payment_no']) ?>
                             <?php if ($p['reference_no']): ?><div class="muted">Ref: <?= esc($p['reference_no']) ?>
                             </div><?php endif; ?>
-                            <?php if ($p['notes']): ?><div class="muted"><?= esc($p['notes']) ?></div><?php endif; ?>
+                            <?php if ($p['notes']): ?><div class="muted"><?= esc($p['notes']) ?></div>
+                            <?php endif; ?>
                         </td>
                         <td><?= esc($dt($p['paid_at'] ?: $p['created_at'])) ?>
                             <?php if ($p['received_by']): ?><div class="muted"><?= esc($p['received_by']) ?></div>
@@ -526,7 +549,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
         </dl>
         <?php elseif ((float) $bk['deposit_total'] > 0): ?>
         <p>Deposit <strong><?= esc($rp($bk['deposit_total'])) ?></strong> termasuk di grand total booking ini.</p>
-        <p class="muted">Belum ada catatan deposit terpisah (penerimaan, potongan, dan pengembalian belum diproses di
+        <p class="muted">Belum ada catatan deposit terpisah (penerimaan, potongan, dan pengembalian belum diproses
+            di
             halaman ini).</p>
         <?php else: ?>
         <p class="muted">Booking ini tidak mewajibkan deposit.</p>
@@ -553,7 +577,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                         <select name="user_id" required>
                             <option value="">Pilih…</option>
                             <?php foreach ($users as $u): ?>
-                            <option value="<?= (int) $u['id'] ?>"><?= esc($u['name']) ?> (<?= esc($u['role_name']) ?>)
+                            <option value="<?= (int) $u['id'] ?>"><?= esc($u['name']) ?>
+                                (<?= esc($u['role_name']) ?>)
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -595,10 +620,12 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                     <?php foreach ($assignments as $a): ?>
                     <tr>
                         <td><?= esc($a['assignee_name_snapshot']) ?>
-                            <?php if ($a['notes']): ?><div class="muted"><?= esc($a['notes']) ?></div><?php endif; ?>
+                            <?php if ($a['notes']): ?><div class="muted"><?= esc($a['notes']) ?></div>
+                            <?php endif; ?>
                         </td>
                         <td><?= esc($assignTypes[$a['assignment_type']] ?? $a['assignment_type']) ?></td>
-                        <td><?= esc($dt($a['start_at'])) ?> <span class="muted">s/d <?= esc($dt($a['end_at'])) ?></span>
+                        <td><?= esc($dt($a['start_at'])) ?> <span class="muted">s/d
+                                <?= esc($dt($a['end_at'])) ?></span>
                         </td>
                         <td><span class="badge <?= esc($badge($a['status']), 'attr') ?>"><?= esc($a['status']) ?></span>
                         </td>
@@ -695,7 +722,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                             <label>Catatan handover</label>
                             <textarea name="notes" rows="2" maxlength="2000"></textarea>
                         </div>
-                        <div class="full"><button type="submit" class="btn btn-primary">Simpan handover</button></div>
+                        <div class="full"><button type="submit" class="btn btn-primary">Simpan handover</button>
+                        </div>
                     </div>
                 </form>
             </details>
@@ -753,7 +781,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     <!-- ---------- Dokumen ---------- -->
     <section data-pane="documents">
         <?php if (empty($documents)): ?>
-        <p class="muted">Belum ada dokumen yang tersimpan untuk booking ini. Invoice dapat dicetak dari tombol “Cetak
+        <p class="muted">Belum ada dokumen yang tersimpan untuk booking ini. Invoice dapat dicetak dari tombol
+            “Cetak
             invoice” di atas.</p>
         <?php else: ?>
         <div class="table-wrap">
