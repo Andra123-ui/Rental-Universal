@@ -60,9 +60,9 @@ if (! function_exists('format_date_short')) {
         }
 
         $months = [
-            1 => 'Okt', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-            'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
-        ];
+    1 => 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
+];
 
         $day   = date('d', $timestamp);
         $month = $months[(int) date('m', $timestamp)] ?? date('M', $timestamp);
@@ -154,4 +154,3 @@ if (! function_exists('mask_text')) {
         return $start . str_repeat('*', min(8, $maskCount)) . $end;
     }
 }
-

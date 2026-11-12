@@ -35,6 +35,12 @@ class Tracking extends BaseController
         return view('pub/track', [
             'booking' => $booking,
             'items' => $items,
+            'pageTitle'   => 'Detail Booking',
+            'activeNav'   => 'bookings',
+            'breadcrumbs' => [
+            'Riwayat Booking' => 'account/bookings',
+            $booking['invoice_no'] => null,
+],
         ]);
     }
 }

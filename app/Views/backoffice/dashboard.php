@@ -11,17 +11,20 @@ $map = [
 ];
 $badge = static fn ($s) => $map[$s] ?? 'badge-off';
 $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharian' : substr((string) $v, 11, 5);
+$hour = (int) date('H');
+$greet = $hour < 11 ? 'Selamat pagi' : ($hour < 15 ? 'Selamat siang' : ($hour < 19 ? 'Selamat sore' : 'Selamat malam'));
 ?>
 
 <div class="page-head">
     <div>
-        <h1>Halo, <?= esc(session()->get('admin_name')) ?></h1>
+        <h1><?= esc($greet) ?>, <?= esc(session()->get('admin_name')) ?></h1>
         <div class="muted"><?= esc(date('d/m/Y')) ?> · <?= esc($branchLabel) ?></div>
     </div>
     <?php if (!empty($quick)): ?>
     <div class="quick">
         <?php foreach ($quick as $q): ?>
-        <a href="<?= esc($q['url'], 'attr') ?>" class="btn <?= $q['primary'] ? 'btn-primary' : 'btn-ghost' ?>"><?= esc($q['label']) ?></a>
+        <a href="<?= esc($q['url'], 'attr') ?>"
+            class="btn <?= $q['primary'] ? 'btn-primary' : 'btn-ghost' ?>"><?= esc($q['label']) ?></a>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -29,44 +32,51 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
 
 <?php if (!$canBooking && !$canFinance && !$canVerify && !$canStaff): ?>
 <div class="panel">
-    <p class="muted" style="margin:0;">Akun ini tidak memiliki ringkasan dashboard. Gunakan menu di samping sesuai hak akses Anda.</p>
+    <p class="muted" style="margin:0;">Akun ini tidak memiliki ringkasan dashboard. Gunakan menu di samping sesuai hak
+        akses Anda.</p>
 </div>
 <?php endif; ?>
 
 <?php if ($canBooking): ?>
-<div class="kpi-grid">
-    <div class="kpi">
-        <div class="kpi-label">Booking hari ini</div>
-        <div class="kpi-value"><?= (int) $kpi['today'] ?></div>
-        <div class="kpi-sub">dibuat hari ini</div>
+<!-- ===== STATS BAR ===== -->
+<div class="stats-bar">
+    <div class="stat highlight">
+        <div class="stat-label">Booking hari ini</div>
+        <div class="stat-value"><?= (int) $kpi['today'] ?></div>
+        <div class="stat-sub">dibuat hari ini</div>
     </div>
-    <div class="kpi">
-        <div class="kpi-label">Pending</div>
-        <div class="kpi-value"><?= (int) $kpi['pending'] ?></div>
-        <div class="kpi-sub">menunggu pembayaran</div>
+    <div class="stat">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value"><?= (int) $kpi['pending'] ?></div>
+        <div class="stat-sub">menunggu pembayaran</div>
     </div>
-    <div class="kpi">
-        <div class="kpi-label">Sedang berjalan</div>
-        <div class="kpi-value"><?= (int) $kpi['ongoing'] ?></div>
-        <div class="kpi-sub">booking aktif sekarang</div>
+    <div class="stat">
+        <div class="stat-label">Sedang berjalan</div>
+        <div class="stat-value"><?= (int) $kpi['ongoing'] ?></div>
+        <div class="stat-sub">booking aktif sekarang</div>
     </div>
-    <div class="kpi">
-        <div class="kpi-label">Utilization</div>
-        <div class="kpi-value"><?= (int) $kpi['utilization'] ?>%</div>
-        <div class="kpi-sub"><?= (int) $kpi['res_used'] ?> dari <?= (int) $kpi['res_total'] ?> unit terpakai hari ini</div>
+    <div class="stat">
+        <div class="stat-label">Utilization</div>
+        <div class="stat-value"><?= (int) $kpi['utilization'] ?><small>%</small></div>
+        <div class="util-track"><span style="width:<?= min(100, (int) $kpi['utilization']) ?>%"></span></div>
+        <div class="stat-sub"><?= (int) $kpi['res_used'] ?> dari <?= (int) $kpi['res_total'] ?> unit</div>
     </div>
-    <?php if ($canFinance): ?>
-    <div class="kpi">
-        <div class="kpi-label">Revenue bulan ini</div>
-        <div class="kpi-value kpi-money"><?= esc($rp($finance['revenue'])) ?></div>
-        <div class="kpi-sub">total terbayar</div>
+</div>
+<?php endif; ?>
+
+<?php if ($canFinance): ?>
+<!-- ===== FINANCE STRIP ===== -->
+<div class="finance-strip">
+    <div class="fin-cell">
+        <div class="stat-label">Revenue bulan ini</div>
+        <div class="fin-amount"><?= esc($rp($finance['revenue'])) ?></div>
+        <div class="fin-note">total terbayar</div>
     </div>
-    <div class="kpi">
-        <div class="kpi-label">Belum lunas</div>
-        <div class="kpi-value kpi-money"><?= esc($rp($finance['unpaid_total'])) ?></div>
-        <div class="kpi-sub"><?= (int) $finance['unpaid_count'] ?> booking</div>
+    <div class="fin-cell">
+        <div class="stat-label">Belum lunas</div>
+        <div class="fin-amount is-danger"><?= esc($rp($finance['unpaid_total'])) ?></div>
+        <div class="fin-note"><?= (int) $finance['unpaid_count'] ?> booking</div>
     </div>
-    <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -76,7 +86,9 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
     <div class="panel">
         <h2 class="panel-title">Jadwal hari ini</h2>
         <?php if (empty($schedule)): ?>
-        <p class="muted">Tidak ada pickup, return, assignment, atau service hari ini.</p>
+        <div class="empty-state">
+            <p>Tidak ada pickup, return, assignment, atau service hari ini.</p>
+        </div>
         <?php else: ?>
         <ul class="list">
             <?php foreach ($schedule as $e): ?>
@@ -97,7 +109,9 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
     <div class="panel">
         <h2 class="panel-title">Perlu perhatian: resource</h2>
         <?php if (empty($resAttention)): ?>
-        <p class="muted">Tidak ada maintenance, blackout, atau unit yang tidak tersedia.</p>
+        <div class="empty-state">
+            <p>Tidak ada maintenance, blackout, atau unit yang tidak tersedia.</p>
+        </div>
         <?php else: ?>
         <ul class="list">
             <?php foreach ($resAttention as $r): ?>
@@ -115,20 +129,24 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
     <?php if ($canFinance): ?>
     <div class="panel">
         <h2 class="panel-title">Perlu perhatian: pembayaran</h2>
-        <p style="margin:0 0 10px;">
-            Menunggu verifikasi: <strong><?= (int) $payAttention['pending'] ?></strong>
-        </p>
+        <div class="stat-strip">
+            <span class="stat-pill"><span class="num"><?= (int) $payAttention['pending'] ?></span> menunggu
+                verifikasi</span>
+        </div>
         <?php if (empty($payAttention['overdue'])): ?>
-        <p class="muted">Tidak ada booking yang jadwalnya sudah lewat dan belum lunas.</p>
+        <div class="empty-state">
+            <p>Tidak ada booking yang jadwalnya sudah lewat dan belum lunas.</p>
+        </div>
         <?php else: ?>
-        <p class="muted" style="margin:0 0 6px;">Jadwal sudah mulai, belum lunas:</p>
+        <p class="muted" style="margin:0 0 8px;">Jadwal sudah mulai, belum lunas:</p>
         <ul class="list">
             <?php foreach ($payAttention['overdue'] as $o): ?>
             <li>
                 <span class="list-main">
                     <?php if ($o['url']): ?><a href="<?= esc($o['url'], 'attr') ?>"><?= esc($o['invoice_no']) ?></a>
                     <?php else: ?><strong><?= esc($o['invoice_no']) ?></strong><?php endif; ?>
-                    <span class="muted"><?= esc($o['customer_name_snapshot']) ?> · mulai <?= esc($dt($o['start_at'])) ?></span>
+                    <span class="muted"><?= esc($o['customer_name_snapshot']) ?> · mulai
+                        <?= esc($dt($o['start_at'])) ?></span>
                 </span>
                 <span class="badge badge-danger"><?= esc($rp($o['balance_due'])) ?></span>
             </li>
@@ -144,14 +162,17 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
         <ul class="list">
             <li>
                 <span class="list-main">
-                    <?php if ($identityUrl): ?><a href="<?= esc($identityUrl, 'attr') ?>">Dokumen identitas menunggu verifikasi</a>
+                    <?php if ($identityUrl): ?><a href="<?= esc($identityUrl, 'attr') ?>">Dokumen identitas menunggu
+                        verifikasi</a>
                     <?php else: ?><strong>Dokumen identitas menunggu verifikasi</strong><?php endif; ?>
                 </span>
-                <span class="badge <?= $custAttention['docs'] > 0 ? 'badge-warn' : 'badge-off' ?>"><?= (int) $custAttention['docs'] ?></span>
+                <span
+                    class="badge <?= $custAttention['docs'] > 0 ? 'badge-warn' : 'badge-off' ?>"><?= (int) $custAttention['docs'] ?></span>
             </li>
             <li>
                 <span class="list-main"><strong>Akun customer suspended / terkunci</strong></span>
-                <span class="badge <?= $custAttention['locked'] > 0 ? 'badge-danger' : 'badge-off' ?>"><?= (int) $custAttention['locked'] ?></span>
+                <span
+                    class="badge <?= $custAttention['locked'] > 0 ? 'badge-danger' : 'badge-off' ?>"><?= (int) $custAttention['locked'] ?></span>
             </li>
         </ul>
     </div>
@@ -161,7 +182,9 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
     <div class="panel">
         <h2 class="panel-title">Booking terbaru</h2>
         <?php if (empty($recentBookings)): ?>
-        <p class="muted">Belum ada booking.</p>
+        <div class="empty-state">
+            <p>Belum ada booking.</p>
+        </div>
         <?php else: ?>
         <ul class="list">
             <?php foreach ($recentBookings as $b): ?>
@@ -169,11 +192,13 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
                 <span class="list-main">
                     <?php if ($b['url']): ?><a href="<?= esc($b['url'], 'attr') ?>"><?= esc($b['invoice_no']) ?></a>
                     <?php else: ?><strong><?= esc($b['invoice_no']) ?></strong><?php endif; ?>
-                    <span class="muted"><?= esc($b['customer_name_snapshot']) ?> · <?= esc($dt($b['created_at'])) ?></span>
+                    <span class="muted"><?= esc($b['customer_name_snapshot']) ?> ·
+                        <?= esc($dt($b['created_at'])) ?></span>
                 </span>
-                <span>
+                <span class="badge-group">
                     <span class="badge <?= esc($badge($b['status']), 'attr') ?>"><?= esc($b['status']) ?></span>
-                    <span class="badge <?= esc($badge($b['payment_status']), 'attr') ?>"><?= esc($b['payment_status']) ?></span>
+                    <span
+                        class="badge <?= esc($badge($b['payment_status']), 'attr') ?>"><?= esc($b['payment_status']) ?></span>
                 </span>
             </li>
             <?php endforeach; ?>
@@ -186,13 +211,16 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
     <div class="panel">
         <h2 class="panel-title">Log aktivitas</h2>
         <?php if (empty($recentLogs)): ?>
-        <p class="muted">Belum ada log.</p>
+        <div class="empty-state">
+            <p>Belum ada log.</p>
+        </div>
         <?php else: ?>
         <ul class="list">
             <?php foreach ($recentLogs as $l): ?>
             <li>
                 <span class="list-main"><?= esc($l['description'] ?: $l['event_type']) ?>
-                    <span class="muted"><?= esc($l['user_name'] ?: 'Tanpa user') ?> · <?= esc($dt($l['created_at'])) ?></span></span>
+                    <span class="muted"><?= esc($l['user_name'] ?: 'Tanpa user') ?> ·
+                        <?= esc($dt($l['created_at'])) ?></span></span>
             </li>
             <?php endforeach; ?>
         </ul>
@@ -202,14 +230,14 @@ $timeLabel = static fn ($v) => substr((string) $v, 11, 5) === '00:00' ? 'Seharia
 
 </div>
 
-<div class="panel" style="margin-top:20px;">
-    <p class="muted" style="margin-top:0;">Role: <strong><?= esc(session()->get('admin_role')) ?></strong></p>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+<div class="role-strip">
+    <div class="role-label">Masuk sebagai <strong><?= esc(session()->get('admin_role')) ?></strong></div>
+    <div class="role-badges">
         <?php if (session()->get('admin_role') === 'owner'): ?>
         <span class="badge badge-ok">semua hak akses (owner)</span>
         <?php else: ?>
         <?php foreach ((array) session()->get('admin_permissions') as $code): ?>
-        <span class="badge badge-ok"><?= esc($code) ?></span>
+        <span class="badge badge-off"><?= esc($code) ?></span>
         <?php endforeach; ?>
         <?php endif; ?>
     </div>

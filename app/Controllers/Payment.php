@@ -9,6 +9,11 @@ class Payment extends BaseController
     protected const PAYMENT_WINDOW_MINUTES = 3;
 
     /**
+     * Status yang sudah tidak boleh dibayar lagi
+     */
+    protected const BLOCKED_STATUSES = ['CANCELLED', 'COMPLETED'];
+
+    /**
      * Halaman pembayaran
      */
     public function index(string $invoiceNo)
@@ -39,32 +44,43 @@ class Payment extends BaseController
             return redirect()->to('/checkout/berhasil/' . $invoiceNo);
         }
 
-        // Booking bukan PENDING
-        if ($booking['status'] !== 'PENDING') {
+        // Dibatalkan / selesai
+        if (in_array($booking['status'], self::BLOCKED_STATUSES, true)) {
             return redirect()->to('/track/' . $invoiceNo)
                 ->with('error', 'Booking tidak dapat dibayar.');
         }
 
-        $secondsLeft = 0;
-
-        if (!empty($booking['expires_at'])) {
-            $secondsLeft = max(
-                0,
-                strtotime($booking['expires_at']) - time()
-            );
+        // Tidak ada sisa tagihan
+        if ((float) ($booking['balance_due'] ?? $booking['grand_total']) <= 0) {
+            return redirect()->to('/track/' . $invoiceNo)
+                ->with('error', 'Tidak ada tagihan yang perlu dibayar.');
         }
 
-        // Kalau waktunya sudah habis, expire sekarang
-        if ($secondsLeft <= 0) {
-            (new \App\Models\AvailabilityModel())->expireStaleBookings();
+        // Timer hanya untuk booking PENDING (batas bayar).
+        // Booking CONFIRMED/ONGOING tidak punya batas waktu.
+        $secondsLeft = null;
 
-            return redirect()->to('/checkout/berhasil/' . $invoiceNo);
+        if ($booking['status'] === 'PENDING' && !empty($booking['expires_at'])) {
+            $secondsLeft = max(0, strtotime($booking['expires_at']) - time());
+
+            // Kalau waktunya sudah habis, expire sekarang
+            if ($secondsLeft <= 0) {
+                (new \App\Models\AvailabilityModel())->expireStaleBookings();
+
+                return redirect()->to('/checkout/berhasil/' . $invoiceNo);
+            }
         }
 
         return view('pub/payment', [
-            'booking' => $booking,
-            'secondsLeft' => $secondsLeft,
-        ]);
+    'booking'     => $booking,
+    'secondsLeft' => $secondsLeft,
+    'pageTitle'   => 'Pembayaran',
+    'activeNav'   => 'bookings',
+    'breadcrumbs' => [
+        'Riwayat Booking' => 'account/bookings',
+        'Pembayaran'      => null,
+    ],
+]);
     }
 
     /**
@@ -99,10 +115,17 @@ class Payment extends BaseController
                 ->with('success', 'Pembayaran sudah berhasil.');
         }
 
-        // Cek expired
+        // Dibatalkan / selesai
+        if (in_array($booking['status'], self::BLOCKED_STATUSES, true)) {
+            return redirect()->to('/track/' . $invoiceNo)
+                ->with('error', 'Booking tidak dapat dibayar.');
+        }
+
+        // Cek expired (batas waktu hanya berlaku untuk PENDING)
         if (
             $booking['status'] === 'EXPIRED' ||
             (
+                $booking['status'] === 'PENDING' &&
                 !empty($booking['expires_at']) &&
                 strtotime($booking['expires_at']) <= time()
             )
@@ -128,14 +151,21 @@ class Payment extends BaseController
          * Klik tombol bayar langsung dianggap berhasil.
          */
 
-        $bookingModel->update($booking['id'], [
+        $update = [
             'payment_status' => 'PAID',
-            'status' => 'CONFIRMED',
-            'paid_total' => $booking['grand_total'],
-            'balance_due' => 0,
-        ]);
+            'paid_total'     => $booking['grand_total'],
+            'balance_due'    => 0,
+        ];
+
+        // Hanya PENDING yang dinaikkan jadi CONFIRMED;
+        // CONFIRMED/ONGOING tetap di statusnya.
+        if ($booking['status'] === 'PENDING') {
+            $update['status'] = 'CONFIRMED';
+        }
+
+        $bookingModel->update($booking['id'], $update);
 
         return redirect()->to('/track/' . $invoiceNo)
-            ->with('success', 'Pembayaran berhasil! Booking Anda sudah dikonfirmasi.');
+            ->with('success', 'Pembayaran berhasil!');
     }
 }

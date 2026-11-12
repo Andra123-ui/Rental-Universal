@@ -156,12 +156,13 @@ $branchQuery = !empty($preSelectedBranchCode) ? '?cabang=' . urlencode($preSelec
                     <input type="hidden" name="catalog_item_id" value="<?= esc($item['id']) ?>">
                     <input type="hidden" name="start_at" id="input_start_at">
                     <input type="hidden" name="qty" value="1">
-                    <input type="hidden" name="branch_id" id="input_branch_id" value="<?= $preSelectedBranch ? (int) $preSelectedBranch : '' ?>">
+                    <input type="hidden" name="branch_id" id="input_branch_id"
+                        value="<?= $preSelectedBranch ? (int) $preSelectedBranch : '' ?>">
                     <input type="hidden" name="end_at" id="input_end_at">
                     <?= csrf_field() ?>
 
                     <div style="display:flex;gap:10px;margin-top:16px;align-items:stretch;">
-                        <button type="submit" name="redirect" value="checkout" id="btn-tambah"
+                        <button type="submit" formaction="<?= base_url('/checkout/langsung') ?>" id="btn-tambah"
                             class="btn btn-primary btn-cart-action"
                             style="flex:1;justify-content:center;padding:15px 24px;font-size:1.02rem;" disabled>
                             <i class="ti-credit-card"></i> Checkout
@@ -204,8 +205,8 @@ $branchQuery = !empty($preSelectedBranchCode) ? '?cabang=' . urlencode($preSelec
                                 <?= esc($ru) ?>
                             </small>
                         </div>
-                        <a href="<?= base_url('/item/' . id_encode($r['id'])) . $branchQuery ?>"
-                            class="btn btn-outline" style="padding:8px 14px;font-size:0.85rem;">Detail</a>
+                        <a href="<?= base_url('/item/' . id_encode($r['id'])) . $branchQuery ?>" class="btn btn-outline"
+                            style="padding:8px 14px;font-size:0.85rem;">Detail</a>
                     </div>
                 </div>
             </div>
@@ -646,7 +647,7 @@ $branchQuery = !empty($preSelectedBranchCode) ? '?cabang=' . urlencode($preSelec
             const cellDate = new Date(viewYear, viewMonth - 1, d);
             cellDate.setHours(0, 0, 0, 0);
             const info = getInfo(dateKey);
-                    const el = document.createElement('div');
+            const el = document.createElement('div');
             el.className = 'cal-day';
 
             if (cellDate < today) {
@@ -935,4 +936,4 @@ $branchQuery = !empty($preSelectedBranchCode) ? '?cabang=' . urlencode($preSelec
 })();
 </script>
 
-<?= view('partials/footer') ?> 
+<?= view('partials/footer') ?>

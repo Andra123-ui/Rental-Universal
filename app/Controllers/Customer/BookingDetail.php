@@ -118,7 +118,7 @@ class BookingDetail extends BaseCustomerController
         ]);
     }
 
-    /**
+        /**
      * GET /account/bookings/{invoice_no}/print (Cetak Invoice Resmi)
      */
     public function print(string $invoiceNo)
@@ -135,6 +135,12 @@ class BookingDetail extends BaseCustomerController
 
         if (!$booking) {
             throw PageNotFoundException::forPageNotFound('Invoice tidak ditemukan.');
+        }
+
+        // Cegah cetak invoice untuk booking batal/expired
+        if (in_array($booking['status'], ['CANCELLED', 'EXPIRED'], true)) {
+            return redirect()->to('account/bookings/' . $invoiceNo)
+                ->with('error', 'Invoice tidak dapat dicetak karena booking telah dibatalkan atau expired.');
         }
 
         $items    = $this->bookingItemModel->where('booking_id', $booking['id'])->findAll();
@@ -154,4 +160,3 @@ class BookingDetail extends BaseCustomerController
         ]);
     }
 }
-

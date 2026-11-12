@@ -37,7 +37,7 @@ class BookingController extends BaseController
             ->limit(self::PER_PAGE, ($page - 1) * self::PER_PAGE)
             ->get()->getResultArray();
 
-        $hasDetail = $this->has('backoffice/bookings/(:segment)');
+        $hasDetail = true;
         foreach ($rows as &$r) {
             $r['enc']        = id_encode((int) $r['id']);
             $r['detail_url'] = $hasDetail ? site_url('backoffice/bookings/' . $r['enc']) : null;
@@ -61,7 +61,7 @@ class BookingController extends BaseController
                                 ->orderBy('branch_name')->get()->getResultArray(),
             'lockBranch' => $this->branchId !== null,
             'canManage'  => admin_can('booking.manage'),
-            'createUrl'  => $this->has('backoffice/bookings/baru') ? site_url('backoffice/bookings/baru') : null,
+            'createUrl'  => (admin_can('booking.create') || admin_can('booking.manage')) ? site_url('backoffice/bookings/baru') : null,
         ]);
     }
 
@@ -373,8 +373,11 @@ class BookingController extends BaseController
         return $v;
     }
 
-    private function has(string $uri): bool
+        private function has(string $uri): bool
     {
+        // CodeIgniter menyimpan placeholder sebagai regex: (:segment) -> ([^/]+)
+        $uri = str_replace('(:segment)', '([^/]+)', $uri);
+
         if (!$this->routeKeys) {
             try {
                 $this->routeKeys = array_keys(service('routes')->getRoutes('get'));

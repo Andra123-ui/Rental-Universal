@@ -11,6 +11,7 @@ class Cart extends BaseController
 
     public function index()
     {
+        session()->remove('buy_now_cart');
         $cart = session()->get(self::SESSION_KEY) ?? [];
         $catalogModel = new CatalogItemModel();
         $availabilityModel = new AvailabilityModel();
@@ -56,6 +57,7 @@ class Cart extends BaseController
 
     public function tambah()
     {
+        session()->remove('buy_now_cart');
         $catalogItemId = (int) $this->request->getPost('catalog_item_id');
         $startAt = $this->request->getPost('start_at');
         $endAt = $this->request->getPost('end_at');
