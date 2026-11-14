@@ -2171,10 +2171,7 @@ if (session()->get('customer_logged_in') && session()->get('customer_id')) {
                             Masuk / Daftar
                         </a>
 
-                        <a href="<?= base_url('/account/booking') ?>">
-                            <i class="ti-receipt"></i>
-                            Cek Booking
-                        </a>
+
                     </div>
                 </div>
 

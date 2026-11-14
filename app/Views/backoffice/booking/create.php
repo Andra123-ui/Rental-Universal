@@ -74,10 +74,11 @@ $jsData  = json_encode([
     background: var(--paper);
 }
 
-/* Perbaikan Tabel Item */
+/* Perbaikan Tabel Item dengan Horizontal Scroll */
 .table-wrap {
     width: 100%;
     overflow-x: auto;
+    /* Memunculkan scrollbar horizontal jika layar sempit */
     margin-bottom: 15px;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -87,8 +88,8 @@ $jsData  = json_encode([
 .item-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 1050px;
-    /* Diperlebar agar tidak menjepit input */
+    min-width: 1200px;
+    /* Memaksa tabel melebar agar kolom tidak terjepit */
 }
 
 .item-table th {
@@ -101,6 +102,7 @@ $jsData  = json_encode([
     text-transform: uppercase;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
+    /* Judul kolom tidak turun ke bawah */
 }
 
 .item-table td {
@@ -113,7 +115,7 @@ $jsData  = json_encode([
     border-bottom: none;
 }
 
-/* Memaksa input agar tidak terlalu kecil */
+/* Memaksa input agar tidak menyusut dan bisa di-scroll */
 .item-table input,
 .item-table select {
     width: 100%;
@@ -124,22 +126,6 @@ $jsData  = json_encode([
     border-radius: 6px;
     background: #fff;
     box-sizing: border-box;
-}
-
-/* Khusus input angka, beri ruang lebih agar angka tidak terpotong */
-.item-table input[type="number"] {
-    min-width: 85px;
-}
-
-/* Hilangkan spinner panah pada input number agar lebih bersih */
-.item-table input[type=number]::-webkit-inner-spin-button,
-.item-table input[type=number]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-.item-table input[type=number] {
-    -moz-appearance: textfield;
 }
 
 .item-table input:focus,
