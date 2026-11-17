@@ -1121,11 +1121,19 @@
         <div class="brand">Backoffice</div>
         <a href="<?= site_url('backoffice/dashboard') ?>"
             class="<?= $nav === 'dashboard' ? 'active' : '' ?>">Dashboard</a>
-        <?php if (admin_can('product.view') || admin_can('product.manage')): ?>
         <?php if (admin_can('booking.view')): ?>
         <a href="<?= site_url('backoffice/bookings') ?>" class="<?= $nav === 'booking' ? 'active' : '' ?>">Booking</a>
+        <a href="<?= site_url('backoffice/calendar') ?>" class="<?= $nav === 'calendar' ? 'active' : '' ?>">Kalender</a>
         <?php endif; ?>
+        <?php if (admin_can('customer.view') || admin_can('customer.manage') || admin_can('customer.verify') || admin_can('booking.view')): ?>
+        <a href="<?= site_url('backoffice/customers') ?>"
+            class="<?= $nav === 'customer' ? 'active' : '' ?>">Customer</a>
+        <?php endif; ?>
+        <?php if (admin_can('product.view') || admin_can('product.manage')): ?>
         <a href="<?= site_url('backoffice/produk') ?>" class="<?= $nav === 'produk' ? 'active' : '' ?>">Produk</a>
+        <?php endif; ?>
+        <?php if (admin_can('category.manage') || admin_can('product.manage')): ?>
+        <a href="<?= site_url('backoffice/kategori') ?>" class="<?= $nav === 'kategori' ? 'active' : '' ?>">Kategori</a>
         <?php endif; ?>
         <?php if (admin_can('jenis.manage')): ?>
         <a href="<?= site_url('backoffice/jenis') ?>" class="<?= $nav === 'jenis' ? 'active' : '' ?>">Jenis</a>

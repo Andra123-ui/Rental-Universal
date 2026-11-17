@@ -165,13 +165,26 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
     // Produk: lihat daftar
     $routes->get('produk', 'ProdukController::index', ['filter' => 'backofficeAuth:product.view,product.manage']);
 
-    // Produk: tambah / ubah / aktif-nonaktif
+        // Produk: tambah / ubah / aktif-nonaktif / duplikat / media CAT 01-02
     $routes->group('produk', ['filter' => 'backofficeAuth:product.manage'], static function ($routes) {
         $routes->get('baru', 'ProdukController::create');
         $routes->post('simpan', 'ProdukController::store');
         $routes->get('ubah/(:segment)', 'ProdukController::edit/$1');
         $routes->post('ubah/(:segment)', 'ProdukController::update/$1');
         $routes->post('status/(:segment)', 'ProdukController::status/$1');
+        $routes->post('duplikat/(:segment)', 'ProdukController::duplicate/$1');
+        $routes->post('media/(:segment)', 'ProdukController::media/$1');
+    });
+
+    // CAT-03: Kategori
+    $routes->group('kategori', ['filter' => 'backofficeAuth:category.manage,product.manage'], static function ($routes) {
+        $routes->get('/', 'CategoryController::index');
+        $routes->get('baru', 'CategoryController::create');
+        $routes->post('simpan', 'CategoryController::store');
+        $routes->get('ubah/(:segment)', 'CategoryController::edit/$1');
+        $routes->post('ubah/(:segment)', 'CategoryController::update/$1');
+        $routes->post('status/(:segment)', 'CategoryController::status/$1');
+        $routes->post('urutan/(:segment)', 'CategoryController::move/$1');
     });
 
     // Jenis
@@ -232,6 +245,33 @@ $routes->group('backoffice', ['namespace' => 'App\Controllers\Backoffice'], stat
         $routes->post('(:segment)/assign/(:segment)/cancel', 'BookingDetailController::cancelAssign/$1/$2', $manage);
         $routes->post('(:segment)/handover', 'BookingDetailController::handover/$1', $manage);
         $routes->post('(:segment)/note', 'BookingDetailController::note/$1', $manage);
+    });
+
+        // BOOK-05: Kalender Booking & Resource
+    $routes->group('calendar', static function ($routes) {
+        $routes->get('/', 'CalendarController::index', ['filter' => 'backofficeAuth:booking.view']);
+        $routes->get('events', 'CalendarController::events', ['filter' => 'backofficeAuth:booking.view']);
+        $routes->post('blackout', 'CalendarController::addBlackout', ['filter' => 'backofficeAuth:booking.manage']);
+    });
+
+        // CUST-01 s/d CUST-03
+    $routes->group('customers', static function ($routes) {
+        $view    = ['filter' => 'backofficeAuth:customer.view,customer.manage,customer.verify,booking.view'];
+        $manage  = ['filter' => 'backofficeAuth:customer.manage,booking.manage'];
+        $resolve = ['filter' => 'backofficeAuth:customer.resolve,customer.manage'];
+
+        // CUST-03 (literal dulu)
+        $routes->get('account-resolution', 'CustomerResolutionController::index', $resolve);
+        $routes->get('account-resolution/case', 'CustomerResolutionController::show', $resolve);
+        $routes->post('account-resolution/resolve', 'CustomerResolutionController::resolve', $resolve);
+
+        // CUST-01 / CUST-02
+        $routes->get('/', 'CustomerController::index', $view);
+        $routes->get('(:segment)', 'CustomerController::show/$1', $view);
+        $routes->post('(:segment)/update', 'CustomerController::update/$1', $manage);
+        $routes->post('(:segment)/account-status', 'CustomerController::accountStatus/$1', $manage);
+        $routes->post('(:segment)/note', 'CustomerController::addNote/$1', $manage);
+        $routes->post('(:segment)/document', 'CustomerController::addDocument/$1', $manage);
     });
 });
 
