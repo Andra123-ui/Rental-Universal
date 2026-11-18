@@ -6,15 +6,11 @@ use CodeIgniter\Database\ConnectionInterface;
 
 /**
  * Pemeriksa ketersediaan unit + kalkulator harga untuk booking dari backoffice.
- * Dipakai BOOK-03 (buat manual), kelak BOOK-04 (reschedule) dan BOOK-05 (kalender).
  *
- * Aturan bentrok sebuah unit pada periode [start, end]:
- *  - unit harus status AVAILABLE dan tidak dihapus
- *  - kapasitas terpakai = jumlah allocated_qty alokasi aktif yang beririsan
- *    dengan [start - buffer_before, end + buffer_after]
- *  - alokasi dari booking CANCELLED / EXPIRED / PENDING yang hold-nya sudah lewat tidak dihitung
- *  - blackout aktif (FULL = unit tertutup, PARTIAL = kapasitas dikurangi capacity_reduction)
- *  - maintenance yang belum selesai/dibatalkan dan beririsan
+ * PERUBAHAN (17 Nov 2026):
+ *  - quote() menerima $withSurcharge (default FALSE) → surcharge weekend/holiday
+ *    diabaikan untuk booking manual backoffice.
+ *  - quote() menerima $withDeposit (default TRUE) → bisa mematikan deposit.
  */
 class BookingAvailability
 {
@@ -29,7 +25,6 @@ class BookingAvailability
     // Parsing
     // ===================================================================
 
-    /** Terima 'Y-m-d' (jadi 00:00) atau 'Y-m-d\TH:i'. Null jika tidak valid. */
     public static function parseMoment($v): ?string
     {
         if (!is_string($v)) {
@@ -57,19 +52,16 @@ class BookingAvailability
     // Harga
     // ===================================================================
 
-    /**
-     * Hitung harga satu baris item.
-     *
-     * Konvensi (sama dengan BookingDetailController::recalcMoney):
-     *   subtotal  = unit_price x durasi x qty + surcharge   (SEBELUM diskon)
-     *   discount  = diskon dari pricing_rules               (disimpan terpisah)
-     *   net       = subtotal - discount
-     * Jika $override diisi, semua aturan harga diabaikan.
-     *
-     * @throws \DomainException bila durasi melanggar batas item
-     */
-    public function quote(array $c, string $start, string $end, float $qty, int $branchId, ?float $override = null): array
-    {
+    public function quote(
+        array $c,
+        string $start,
+        string $end,
+        float $qty,
+        int $branchId,
+        ?float $override = null,
+        bool $withSurcharge = false,
+        bool $withDeposit = true
+    ): array {
         $s = strtotime($start);
         $e = strtotime($end);
         if ($e <= $s) {
@@ -84,7 +76,7 @@ class BookingAvailability
         } elseif ($unit === 'HOUR') {
             $dur = max(1, (int) ceil(($e - $s) / 3600));
         } else {
-            $dur = 1; // SESSION / paket: satu kali
+            $dur = 1;
         }
 
         if ($c['min_duration'] !== null && $dur < (float) $c['min_duration']) {
@@ -111,32 +103,32 @@ class BookingAvailability
 
             $days = $calendar ? $dur : 1;
 
-            // Surcharge: semua aturan yang cocok, dihitung per hari yang kena
-            foreach ($rules as $r) {
-                if ($r['rule_type'] !== 'SURCHARGE' || !$this->qtyDurOk($r, $qty, $dur)) {
-                    continue;
-                }
-                $hit = 0;
-                for ($i = 0; $i < $days; $i++) {
-                    $dayTs = strtotime(date('Y-m-d', $s) . " +{$i} day");
-                    if ($this->dayOk($r, $dayTs)) {
-                        $hit++;
+            if ($withSurcharge) {
+                foreach ($rules as $r) {
+                    if ($r['rule_type'] !== 'SURCHARGE' || !$this->qtyDurOk($r, $qty, $dur)) {
+                        continue;
                     }
-                }
-                if ($hit === 0) {
-                    continue;
-                }
-                $amt = strtoupper((string) $r['value_type']) === 'PERCENT'
-                    ? $base * $qty * $hit * (float) $r['price_value'] / 100
-                    : (float) $r['price_value'] * $qty * $hit;
-                $amt = round($amt, 2);
-                if ($amt > 0) {
-                    $surcharge += $amt;
-                    $lines[] = ['type' => 'SURCHARGE', 'name' => $r['name'], 'amount' => $amt];
+                    $hit = 0;
+                    for ($i = 0; $i < $days; $i++) {
+                        $dayTs = strtotime(date('Y-m-d', $s) . " +{$i} day");
+                        if ($this->dayOk($r, $dayTs)) {
+                            $hit++;
+                        }
+                    }
+                    if ($hit === 0) {
+                        continue;
+                    }
+                    $amt = strtoupper((string) $r['value_type']) === 'PERCENT'
+                        ? $base * $qty * $hit * (float) $r['price_value'] / 100
+                        : (float) $r['price_value'] * $qty * $hit;
+                    $amt = round($amt, 2);
+                    if ($amt > 0) {
+                        $surcharge += $amt;
+                        $lines[] = ['type' => 'SURCHARGE', 'name' => $r['name'], 'amount' => $amt];
+                    }
                 }
             }
 
-            // Diskon: hanya satu yang dipakai (prioritas tertinggi, lalu nominal terbesar)
             $bestAmt  = 0.0;
             $bestRule = null;
             $dateOnly = strtotime(date('Y-m-d', $s));
@@ -163,6 +155,9 @@ class BookingAvailability
         }
 
         $subtotal = round($gross + $surcharge, 2);
+        $deposit  = ($withDeposit && !empty($c['deposit_required']))
+            ? round((float) $c['deposit_amount'] * $qty, 2)
+            : 0.0;
 
         return [
             'duration'   => $dur,
@@ -173,27 +168,16 @@ class BookingAvailability
             'discount'   => $discount,
             'subtotal'   => $subtotal,
             'net'        => round($subtotal - $discount, 2),
-            'deposit'    => !empty($c['deposit_required']) ? round((float) $c['deposit_amount'] * $qty, 2) : 0.0,
+            'deposit'    => $deposit,
             'lines'      => $lines,
             'overridden' => $override !== null,
         ];
     }
 
     // ===================================================================
-    // Ketersediaan & alokasi
+    // Ketersediaan & alokasi (tidak berubah)
     // ===================================================================
 
-    /**
-     * Cari unit untuk $qty pada periode [start, end].
-     *
-     * @param int|null $resourceId       alokasi manual ke satu unit (null = otomatis)
-     * @param bool     $lock             kunci baris resources (WAJIB di dalam transaksi saat menyimpan)
-     * @param int|null $ignoreBookingId  abaikan alokasi milik booking ini (untuk reschedule)
-     * @param array    $pending          alokasi yang belum masuk DB: [['resource_id','start','end','qty'], ...]
-     * @param array    $ignoreItemIds    id booking_items yang alokasinya dianggap sudah dilepas (simulasi reschedule)
-     *
-     * @return array{ok:bool, allocations:array, free:float, message:string, reasons:array}
-     */
     public function allocate(
         array $c,
         string $start,
@@ -239,7 +223,6 @@ class BookingAvailability
                 $cap = 1.0;
             }
 
-            // Maintenance berjalan -> unit tertutup
             $mt = $this->db->query(
                 "SELECT 1 FROM maintenance_records
                   WHERE resource_id = ? AND status NOT IN ('CANCELLED','DONE','COMPLETED')
@@ -251,7 +234,6 @@ class BookingAvailability
                 continue;
             }
 
-            // Blackout: FULL menutup unit, PARTIAL mengurangi kapasitas
             $blk = $this->db->query(
                 "SELECT block_type, capacity_reduction, reason FROM blackout_periods
                   WHERE status = 'ACTIVE' AND start_at < ? AND end_at > ?
@@ -273,7 +255,6 @@ class BookingAvailability
                 continue;
             }
 
-            // Kapasitas terpakai oleh booking lain
             $q = "SELECT COALESCE(SUM(a.allocated_qty), 0) AS used
                     FROM booking_resource_allocations a
                     JOIN booking_items i ON i.id = a.booking_item_id
@@ -331,9 +312,6 @@ class BookingAvailability
         return ['ok' => true, 'allocations' => $alloc, 'free' => $totalFree, 'message' => '', 'reasons' => $reasons];
     }
 
-    /**
-     * Peringatan (tidak memblokir) soal availability_rules: hari/jam layanan dan batas maju pemesanan.
-     */
     public function warnings(array $c, string $start, string $end): array
     {
         $rules = $this->db->table('availability_rules')
@@ -394,7 +372,6 @@ class BookingAvailability
         return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
     }
 
-    /** Hari dalam aturan harga: 1-7 (Senin-Minggu); 0 juga dianggap Minggu. */
     private function dayOk(array $r, int $dayTs): bool
     {
         if (!$this->rangeOk($r, $dayTs)) {

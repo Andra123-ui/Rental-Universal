@@ -14,6 +14,7 @@ use App\Controllers\BaseController;
  *
  * Aturan: tidak pernah merge hanya berdasar nama; nomor harus terverifikasi;
  * merge transaksional dan diaudit (customer_resolutions + activity_logs).
+ * Karena merge memindahkan booking lintas cabang, halaman ini hanya untuk admin lintas cabang (branch_id NULL).
  */
 class CustomerResolutionController extends BaseController
 {
@@ -25,6 +26,7 @@ class CustomerResolutionController extends BaseController
     private const LIMIT = 200;
 
     private $conn;
+    private ?int $branchId = null;
     private array $cf = [];
     private array $af = [];
 
@@ -34,6 +36,9 @@ class CustomerResolutionController extends BaseController
     public function index()
     {
         $this->boot();
+        if ($r = $this->guard()) {
+            return $r;
+        }
 
         $type   = (string) $this->request->getGet('type');
         $status = (string) $this->request->getGet('status');
@@ -93,6 +98,9 @@ class CustomerResolutionController extends BaseController
     public function show()
     {
         $this->boot();
+        if ($r = $this->guard()) {
+            return $r;
+        }
 
         $key  = (string) $this->request->getGet('key');
         $cand = $this->parseKey($key);
@@ -149,6 +157,9 @@ class CustomerResolutionController extends BaseController
     public function resolve()
     {
         $this->boot();
+        if ($r = $this->guard()) {
+            return $r;
+        }
 
         if (!$this->request->is('post')) {
             return redirect()->to($this->queueUrl());
@@ -595,9 +606,20 @@ class CustomerResolutionController extends BaseController
     {
         helper('backoffice');
 
-        $this->conn = db_connect();
-        $this->cf   = $this->conn->getFieldNames('customers');
-        $this->af   = $this->conn->tableExists('customer_accounts') ? $this->conn->getFieldNames('customer_accounts') : [];
+        $this->conn     = db_connect();
+        $this->branchId = session()->get('admin_branch_id') ? (int) session()->get('admin_branch_id') : null;
+        $this->cf       = $this->conn->getFieldNames('customers');
+        $this->af       = $this->conn->tableExists('customer_accounts') ? $this->conn->getFieldNames('customer_accounts') : [];
+    }
+
+    /** Admin cabang tidak boleh memakai halaman ini (merge lintas cabang). */
+    private function guard()
+    {
+        if ($this->branchId !== null) {
+            return redirect()->to(site_url('backoffice/customers'))
+                ->with('error', 'Account resolution hanya bisa dilakukan Owner / admin lintas cabang.');
+        }
+        return null;
     }
 
     private function queueUrl(): string

@@ -19,83 +19,97 @@ class Checkout extends BaseController
     protected const BUY_NOW_KEY = 'buy_now_cart';
     protected $helpers = ['business'];
 
-    /**
- * Keranjang aktif: item "beli langsung" kalau ada, kalau tidak keranjang biasa.
- */
-private function getCart(): array
-{
-    $buyNow = session()->get(self::BUY_NOW_KEY);
-    if (!empty($buyNow)) {
-        return $buyNow;
+    private function getCart(): array
+    {
+        $buyNow = session()->get(self::BUY_NOW_KEY);
+        if (!empty($buyNow)) {
+            return $buyNow;
+        }
+        return session()->get(self::CART_KEY) ?? [];
     }
-    return session()->get(self::CART_KEY) ?? [];
-}
-
-/**
- * Tombol Checkout di halaman detail item: tanpa masuk keranjang.
- */
-public function langsung()
-{
-    if (!$this->request->is('post')) {
-        return redirect()->to('/catalog');
-    }
-
-    $itemId   = (int) $this->request->getPost('catalog_item_id');
-    $branchId = (int) $this->request->getPost('branch_id') ?: null;
-    $qty      = max(1, (int) $this->request->getPost('qty'));
-    $startAt  = (string) $this->request->getPost('start_at');
-    $endAt    = (string) $this->request->getPost('end_at');
-
-    if (!$itemId || strtotime($startAt) === false || strtotime($endAt) === false || strtotime($endAt) <= strtotime($startAt)) {
-        return redirect()->back()->with('error', 'Pilih cabang dan tanggal sewa terlebih dahulu.');
-    }
-
-    $product = (new CatalogItemModel())->find($itemId);
-    if (!$product) {
-        return redirect()->to('/catalog')->with('error', 'Item tidak ditemukan.');
-    }
-
-    $avail = (new \App\Models\AvailabilityModel())
-        ->checkAvailability($itemId, $branchId, $startAt, $endAt, $qty);
-
-    if (($avail['status'] ?? '') === 'unavailable') {
-    return redirect()->back()->with('error', $avail['message'] ?? 'Item tidak tersedia pada jadwal yang dipilih.');
-    }
-    if (($avail['status'] ?? '') === 'limited' && $qty > $avail['available_units']) {
-    $sisa = (int) floor($avail['available_units']);
-    return redirect()->back()->with('error', "Stok tidak mencukupi. Tersisa {$sisa} unit untuk jadwal ini.");
-    }
-
-    $branch = $branchId
-        ? \Config\Database::connect()->table('branches')->where('id', $branchId)->get()->getRowArray()
-        : null;
-
-    $key = $itemId . '_' . md5($branchId . $startAt . $endAt);
-
-    session()->set(self::BUY_NOW_KEY, [
-        $key => [
-            'catalog_item_id' => $itemId,
-            'qty'             => $qty,
-            'branch_id'       => $branchId,
-            'start_at'        => $startAt,
-            'end_at'          => $endAt,
-            'branch_name'     => $branch['name'] ?? null,
-            'branch_address'  => $branch['address'] ?? null,
-            'branch_phone'    => $branch['phone'] ?? null,
-        ],
-    ]);
-
-    // Buang pilihan fulfillment lama supaya tidak bentrok dengan item baru
-    $co = session()->get(self::CHECKOUT_KEY) ?? [];
-    unset($co['fulfillment_items']);
-    session()->set(self::CHECKOUT_KEY, $co);
-
-    return redirect()->to('/checkout');
-}
 
     /**
-     * PUB-07: Form Data Penyewa
+     * FUNGSI BARU: Menyesuaikan jam mulai & selesai.
+     * Jika pricing_unit == 'FULL_DAY', paksa 00:00 - 23:59.
      */
+        private function normalizeDates(array $product, string $startAt, string $endAt): array
+    {
+        $pricingUnit = $product['pricing_unit'] ?? 'DAY';
+        
+        // Jika pakai DAY (Hari) atau FULL_DAY, paksa jadi 00:00 - 23:59
+        if (in_array($pricingUnit, ['DAY', 'FULL_DAY'])) {
+            $startDate = date('Y-m-d', strtotime($startAt));
+            
+            $newStart = $startDate . ' 00:00:00';
+            $newEnd   = $startDate . ' 23:59:59';
+            
+            return [$newStart, $newEnd];
+        }
+        
+        return [$startAt, $endAt];
+    }
+
+    public function langsung()
+    {
+        if (!$this->request->is('post')) {
+            return redirect()->to('/catalog');
+        }
+
+        $itemId   = (int) $this->request->getPost('catalog_item_id');
+        $branchId = (int) $this->request->getPost('branch_id') ?: null;
+        $qty      = max(1, (int) $this->request->getPost('qty'));
+        $startAt  = (string) $this->request->getPost('start_at');
+        $endAt    = (string) $this->request->getPost('end_at');
+
+        $product = (new CatalogItemModel())->find($itemId);
+        if (!$product) {
+            return redirect()->to('/catalog')->with('error', 'Item tidak ditemukan.');
+        }
+
+        // NORMALISASI WAKTU DI SINI
+        [$startAt, $endAt] = $this->normalizeDates($product, $startAt, $endAt);
+
+        if (!$itemId || strtotime($startAt) === false || strtotime($endAt) === false || strtotime($endAt) <= strtotime($startAt)) {
+            return redirect()->back()->with('error', 'Pilih cabang dan tanggal sewa terlebih dahulu.');
+        }
+
+        $avail = (new \App\Models\AvailabilityModel())
+            ->checkAvailability($itemId, $branchId, $startAt, $endAt, $qty);
+
+        if (($avail['status'] ?? '') === 'unavailable') {
+            return redirect()->back()->with('error', $avail['message'] ?? 'Item tidak tersedia pada jadwal yang dipilih.');
+        }
+        if (($avail['status'] ?? '') === 'limited' && $qty > $avail['available_units']) {
+            $sisa = (int) floor($avail['available_units']);
+            return redirect()->back()->with('error', "Stok tidak mencukupi. Tersisa {$sisa} unit untuk jadwal ini.");
+        }
+
+        $branch = $branchId
+            ? \Config\Database::connect()->table('branches')->where('id', $branchId)->get()->getRowArray()
+            : null;
+
+        $key = $itemId . '_' . md5($branchId . $startAt . $endAt);
+
+        session()->set(self::BUY_NOW_KEY, [
+            $key => [
+                'catalog_item_id' => $itemId,
+                'qty'             => $qty,
+                'branch_id'       => $branchId,
+                'start_at'        => $startAt,
+                'end_at'          => $endAt,
+                'branch_name'     => $branch['name'] ?? null,
+                'branch_address'  => $branch['address'] ?? null,
+                'branch_phone'    => $branch['phone'] ?? null,
+            ],
+        ]);
+
+        $co = session()->get(self::CHECKOUT_KEY) ?? [];
+        unset($co['fulfillment_items']);
+        session()->set(self::CHECKOUT_KEY, $co);
+
+        return redirect()->to('/checkout');
+    }
+
     public function index()
     {
         $cart = $this->getCart();
@@ -128,8 +142,8 @@ public function langsung()
         }
 
         if ((new \App\Libraries\OtpService())->normalizePhone((string) $this->request->getPost('phone')) === null) {
-    return redirect()->back()->withInput()->with('errors', ['Format nomor HP tidak valid. Gunakan format 08xxxxxxxxxx.']);
-}
+            return redirect()->back()->withInput()->with('errors', ['Format nomor HP tidak valid. Gunakan format 08xxxxxxxxxx.']);
+        }
 
         $wait = $this->cooldownRemaining((string) $this->request->getPost('phone'));
         if ($wait > 0) {
@@ -157,10 +171,7 @@ public function langsung()
         return redirect()->to('/checkout/fulfillment');
     }
 
-    /**
-     * PUB-08: Metode Pemenuhan & Lokasi (Per Item)
-     */
-        public function fulfillment()
+    public function fulfillment()
     { 
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
         if (empty($checkoutData['customer'])) {
@@ -201,8 +212,6 @@ public function langsung()
                     'start_at' => $line['start_at'],
                     'end_at' => $line['end_at'],
                     'line_total' => $lineTotal,
-                    
-                    // DATA DARI SESSION KERANJANG
                     'branch_name' => $line['branch_name'] ?? null,
                     'branch_address' => $line['branch_address'] ?? null,
                     'branch_phone' => $line['branch_phone'] ?? null,
@@ -251,9 +260,6 @@ public function langsung()
         return redirect()->to('/checkout/review');
     }
 
-    /**
-     * PUB-09: Review Booking & Harga (Per Item Fulfillment)
-     */
     public function review()
     {
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
@@ -277,13 +283,16 @@ public function langsung()
                 continue;
             }
 
+            // NORMALISASI LAGI (Berjaga-jaga jika produk diubah di tengah jalan)
+            [$startAt, $endAt] = $this->normalizeDates($product, $line['start_at'], $line['end_at']);
+
             $branchId = !empty($line['branch_id']) ? (int) $line['branch_id'] : null;
 
             $price = $availabilityModel->estimatePrice(
                 $product,
                 $branchId,
-                $line['start_at'],
-                $line['end_at'],
+                $startAt,
+                $endAt,
                 (int) $line['qty']
             );
             $lineTotal = $price['subtotal'];
@@ -301,8 +310,8 @@ public function langsung()
                 'key' => $key,
                 'product' => $product,
                 'qty' => $line['qty'],
-                'start_at' => $line['start_at'],
-                'end_at' => $line['end_at'],
+                'start_at' => $startAt,
+                'end_at' => $endAt,
                 'line_total' => $lineTotal,
                 'business_name' => business_name($product['business_id'] ?? null),
                 'branch_name' => $line['branch_name'] ?? branch_name($branchId),
@@ -322,9 +331,6 @@ public function langsung()
         ]);
     }
 
-    /**
-     * Proses final: buat bookings + booking_items + allocations dalam 1 transaction.
-     */
     public function proses()
     {
         $checkoutData = session()->get(self::CHECKOUT_KEY) ?? [];
@@ -388,11 +394,14 @@ public function langsung()
                     continue;
                 }
 
+                // NORMALISASI WAKTU (Final saat proses simpan)
+                [$startAt, $endAt] = $this->normalizeDates($product, $line['start_at'], $line['end_at']);
+
                 $availCheck = $availabilityModel->checkAvailability(
                     (int) $product['id'],
                     $line['branch_id'] ?? null,
-                    $line['start_at'],
-                    $line['end_at'],
+                    $startAt,
+                    $endAt,
                     (int) $line['qty']
                 );
 
@@ -404,8 +413,8 @@ public function langsung()
                 $price = $availabilityModel->estimatePrice(
                     $product,
                     $line['branch_id'] ?? null,
-                    $line['start_at'],
-                    $line['end_at'],
+                    $startAt,
+                    $endAt,
                     (int) $line['qty']
                 );
 
@@ -414,11 +423,11 @@ public function langsung()
                 $subtotal += $lineTotal;
                 $depositTotal += $lineDeposit;
 
-                if ($earliestStart === null || $line['start_at'] < $earliestStart) {
-                    $earliestStart = $line['start_at'];
+                if ($earliestStart === null || $startAt < $earliestStart) {
+                    $earliestStart = $startAt;
                 }
-                if ($latestEnd === null || $line['end_at'] > $latestEnd) {
-                    $latestEnd = $line['end_at'];
+                if ($latestEnd === null || $endAt > $latestEnd) {
+                    $latestEnd = $endAt;
                 }
 
                 $cartLines[] = [
@@ -426,7 +435,9 @@ public function langsung()
                     'line' => $line,
                     'line_total' => $lineTotal,
                     'price' => $price,
-                    'key' => $key
+                    'key' => $key,
+                    'start_at' => $startAt,
+                    'end_at' => $endAt,
                 ];
             }
 
@@ -482,8 +493,8 @@ public function langsung()
                     'catalog_item_id' => $product['id'],
                     'item_name_snapshot' => $product['name'],
                     'item_type_snapshot' => $product['item_type'],
-                    'start_at' => $line['start_at'],
-                    'end_at' => $line['end_at'],
+                    'start_at' => $cl['start_at'],
+                    'end_at' => $cl['end_at'],
                     'quantity' => $line['qty'],
                     'duration_value' => $cl['price']['units'],
                     'duration_unit' => $product['pricing_unit'],
@@ -498,8 +509,8 @@ public function langsung()
                 $plan = $availabilityModel->allocateResources(
                     (int) $product['id'],
                     $line['branch_id'] ?? null,
-                    $line['start_at'],
-                    $line['end_at'],
+                    $cl['start_at'],
+                    $cl['end_at'],
                     (int) $line['qty']
                 );
 
@@ -512,8 +523,8 @@ public function langsung()
                         'booking_item_id' => $bookingItemId,
                         'resource_id' => $p['resource_id'],
                         'allocated_qty' => $p['qty'],
-                        'start_at' => $line['start_at'],
-                        'end_at' => $line['end_at'],
+                        'start_at' => $cl['start_at'],
+                        'end_at' => $cl['end_at'],
                         'allocation_status' => 'RESERVED',
                     ]);
                 }
@@ -541,9 +552,9 @@ public function langsung()
             }
 
             if (!empty(session()->get(self::BUY_NOW_KEY))) {
-            session()->remove(self::BUY_NOW_KEY);      // beli langsung: keranjang tetap utuh
+                session()->remove(self::BUY_NOW_KEY);
             } else {
-            session()->remove(self::CART_KEY);
+                session()->remove(self::CART_KEY);
             }
             session()->remove(self::CHECKOUT_KEY);
 
@@ -593,37 +604,36 @@ public function langsung()
     }
 
     private function cooldownRemaining(string $phone): int
-{
-    (new \App\Models\AvailabilityModel())->expireStaleBookings();
+    {
+        (new \App\Models\AvailabilityModel())->expireStaleBookings();
 
-    // Customer login: cooldown ikut akun, bukan nomor yang diketik
-    if (session()->get('customer_logged_in') && session()->get('customer_id')) {
-        $customerId = (int) session()->get('customer_id');
-    } else {
-        $customer = (new CustomerModel())
-            ->where('phone', $this->normalizePhone($phone))
-            ->first();
+        if (session()->get('customer_logged_in') && session()->get('customer_id')) {
+            $customerId = (int) session()->get('customer_id');
+        } else {
+            $customer = (new CustomerModel())
+                ->where('phone', $this->normalizePhone($phone))
+                ->first();
 
-        if (!$customer) {
+            if (!$customer) {
+                return 0;
+            }
+            $customerId = (int) $customer['id'];
+        }
+
+        $last = \Config\Database::connect()->table('bookings')
+            ->select('expires_at')
+            ->where('customer_id', $customerId)
+            ->where('status', 'EXPIRED')
+            ->where('expires_at IS NOT NULL')
+            ->orderBy('expires_at', 'DESC')
+            ->limit(1)
+            ->get()
+            ->getRowArray();
+
+        if (!$last) {
             return 0;
         }
-        $customerId = (int) $customer['id'];
+
+        return max(0, strtotime($last['expires_at']) + self::COOLDOWN_SECONDS - time());
     }
-
-    $last = \Config\Database::connect()->table('bookings')
-        ->select('expires_at')
-        ->where('customer_id', $customerId)
-        ->where('status', 'EXPIRED')
-        ->where('expires_at IS NOT NULL')
-        ->orderBy('expires_at', 'DESC')
-        ->limit(1)
-        ->get()
-        ->getRowArray();
-
-    if (!$last) {
-        return 0;
-    }
-
-    return max(0, strtotime($last['expires_at']) + self::COOLDOWN_SECONDS - time());
-}
 }

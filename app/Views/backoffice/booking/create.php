@@ -3,12 +3,12 @@
 <?php
 $jsFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 $jsData  = json_encode([
-    'items'       => $items,
-    'resources'   => $resources,
-    'fees'        => $fees,
-    'lockBranch'  => $lockBranch,
-    'canOverride' => $canOverride,
-    'checkUrl'    => site_url('backoffice/bookings/check'),
+    'items'        => $items,
+    'resources'    => $resources,
+    'fees'         => $fees,
+    'lockBranch'   => $lockBranch,
+    'canOverride'  => $canOverride,
+    'checkUrl'     => site_url('backoffice/bookings/check'),
     'customersUrl' => site_url('backoffice/bookings/customers'),
 ], $jsFlags);
 ?>
@@ -74,11 +74,9 @@ $jsData  = json_encode([
     background: var(--paper);
 }
 
-/* Perbaikan Tabel Item dengan Horizontal Scroll */
 .table-wrap {
     width: 100%;
     overflow-x: auto;
-    /* Memunculkan scrollbar horizontal jika layar sempit */
     margin-bottom: 15px;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -89,7 +87,6 @@ $jsData  = json_encode([
     width: 100%;
     border-collapse: collapse;
     min-width: 1200px;
-    /* Memaksa tabel melebar agar kolom tidak terjepit */
 }
 
 .item-table th {
@@ -102,7 +99,6 @@ $jsData  = json_encode([
     text-transform: uppercase;
     border-bottom: 1px solid var(--line);
     white-space: nowrap;
-    /* Judul kolom tidak turun ke bawah */
 }
 
 .item-table td {
@@ -115,7 +111,6 @@ $jsData  = json_encode([
     border-bottom: none;
 }
 
-/* Memaksa input agar tidak menyusut dan bisa di-scroll */
 .item-table input,
 .item-table select {
     width: 100%;
@@ -182,6 +177,19 @@ $jsData  = json_encode([
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 16px;
+}
+
+.fulfillment-locked {
+    height: 42px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    font-size: .88rem;
+    color: var(--ink);
+    box-sizing: border-box;
 }
 </style>
 
@@ -272,8 +280,20 @@ $jsData  = json_encode([
                     </option>
                     <?php endforeach; ?>
                 </select>
+                <div id="fulfillmentLocked" class="fulfillment-locked" hidden>Ambil sendiri</div>
             </div>
-            <div></div>
+            <?php if (!empty($anyDeposit)): ?>
+            <div>
+                <label for="depositMode">Deposit</label>
+                <select id="depositMode" name="deposit_mode">
+                    <option value="WITH">Pakai deposit (sesuai aturan item)</option>
+                    <option value="WITHOUT">Tanpa deposit</option>
+                </select>
+                <div class="hint">Pilih "Tanpa deposit" bila customer tidak perlu membayar deposit.</div>
+            </div>
+            <?php else: ?>
+            <input type="hidden" name="deposit_mode" value="WITHOUT">
+            <?php endif; ?>
             <div class="full" id="addrBox" hidden>
                 <div class="form-grid">
                     <div>
@@ -300,10 +320,8 @@ $jsData  = json_encode([
                         <th style="width: 15%;">Unit</th>
                         <th style="width: 14%;">Mulai</th>
                         <th style="width: 14%;">Selesai</th>
-                        <!-- Beri ruang lebih untuk Qty -->
                         <th style="width: 8%; min-width: 80px; text-align: center;">Qty</th>
                         <?php if ($canOverride): ?>
-                        <!-- Beri ruang lebih untuk Harga Manual -->
                         <th style="width: 12%; min-width: 120px;">Harga Manual</th>
                         <?php endif; ?>
                         <th style="min-width: 200px;">Hasil Pemeriksaan</th>
@@ -406,7 +424,7 @@ $jsData  = json_encode([
 
     function isCalendar(itemId) {
         var i = itemMap[itemId];
-        return i && (i.pricing_unit === 'DAY' || i.pricing_unit === 'NIGHT');
+        return i && (i.pricing_unit === 'DAY' || i.pricing_unit === 'NIGHT' || i.pricing_unit === 'FULL_DAY');
     }
 
     // ---------------- Customer ----------------
@@ -429,15 +447,9 @@ $jsData  = json_encode([
     var timer = null;
 
     function accountText(s) {
-        if (!s) {
-            return 'Tanpa akun';
-        }
-        if (s === 'ACTIVE') {
-            return 'Akun aktif';
-        }
-        if (s === 'PENDING') {
-            return 'Akun belum diverifikasi';
-        }
+        if (!s) return 'Tanpa akun';
+        if (s === 'ACTIVE') return 'Akun aktif';
+        if (s === 'PENDING') return 'Akun belum diverifikasi';
         return 'Akun ' + s.toLowerCase();
     }
 
@@ -463,6 +475,7 @@ $jsData  = json_encode([
         results.textContent = '';
         q.value = '';
     }
+
     q.addEventListener('input', function() {
         clearTimeout(timer);
         var v = q.value.trim();
@@ -518,14 +531,80 @@ $jsData  = json_encode([
     var fSel = document.getElementById('fulfillment');
     var addrBox = document.getElementById('addrBox');
 
-    function applyFulfillment() {
-        var v = fSel.value;
-        addrBox.hidden = !(v === 'DELIVERY' || v === 'ONSITE');
+    function isWalkinSource() {
+        var s = document.getElementById('source');
+        return !!s && s.value === 'WALKIN';
     }
+
+    function applyFulfillment() {
+        if (isWalkinSource()) {
+            addrBox.hidden = true;
+            addrBox.style.display = 'none';
+            return;
+        }
+        var v = fSel.value;
+        var need = (v === 'DELIVERY' || v === 'ONSITE');
+        addrBox.hidden = !need;
+        addrBox.style.display = need ? '' : 'none';
+    }
+
     fSel.addEventListener('change', function() {
         applyFulfillment();
         clearResults();
     });
+
+    var fLocked = document.getElementById('fulfillmentLocked');
+
+    function syncFulfillmentForSource() {
+        var sourceSel = document.getElementById('source');
+        if (!sourceSel || !fSel || !fLocked) return;
+        var isWalkin = sourceSel.value === 'WALKIN';
+
+        if (isWalkin) {
+            fSel.style.display = 'none';
+            fSel.setAttribute('hidden', '');
+            fSel.disabled = true;
+            fLocked.style.display = 'flex';
+            fLocked.removeAttribute('hidden');
+
+            var hidden = document.getElementById('fulfillmentHidden');
+            if (!hidden) {
+                hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'fulfillment_method';
+                hidden.id = 'fulfillmentHidden';
+                fSel.parentNode.appendChild(hidden);
+            }
+            hidden.value = 'SELF_PICKUP';
+
+            addrBox.hidden = true;
+            addrBox.style.display = 'none';
+            document.getElementById('addrIn').value = '';
+            document.getElementById('addrOut').value = '';
+        } else {
+            fSel.style.display = '';
+            fSel.removeAttribute('hidden');
+            fSel.disabled = false;
+            fLocked.style.display = 'none';
+            fLocked.setAttribute('hidden', '');
+
+            var hidden = document.getElementById('fulfillmentHidden');
+            if (hidden) hidden.remove();
+
+            if (fSel.value === 'SELF_PICKUP') {
+                var fallback = null;
+                for (var i = 0; i < fSel.options.length; i++) {
+                    if (fSel.options[i].value !== 'SELF_PICKUP') {
+                        fallback = fSel.options[i].value;
+                        break;
+                    }
+                }
+                fSel.value = fallback !== null ? fallback : fSel.options[0].value;
+            }
+            applyFulfillment();
+        }
+        clearResults();
+    }
 
     // ---------------- Baris item ----------------
     function resourceOptions(sel, itemId, keep) {
@@ -543,9 +622,7 @@ $jsData  = json_encode([
                 }));
             }
         });
-        if (keep) {
-            sel.value = keep;
-        }
+        if (keep) sel.value = keep;
     }
 
     function setInputType(inp, itemId) {
@@ -609,6 +686,7 @@ $jsData  = json_encode([
                 placeholder: 'sesuai aturan'
             });
         }
+
         var resCell = el('td', {
             class: 'res-cell'
         });
@@ -622,10 +700,18 @@ $jsData  = json_encode([
         function onItem() {
             setInputType(startIn, itemSel.value);
             setInputType(endIn, itemSel.value);
+            var item = itemMap[itemSel.value];
+            if (item && (item.pricing_unit === 'DAY' || item.pricing_unit === 'FULL_DAY' || item.pricing_unit ===
+                    'NIGHT')) {
+                if (startIn.value) {
+                    endIn.value = startIn.value;
+                }
+            }
             resourceOptions(resSel, itemSel.value, null);
             resCell.textContent = '';
             clearSummary();
         }
+
         itemSel.addEventListener('change', onItem);
         [resSel, startIn, endIn, qtyIn].concat(ovIn ? [ovIn] : []).forEach(function(x) {
             x.addEventListener('change', function() {
@@ -633,9 +719,18 @@ $jsData  = json_encode([
                 clearSummary();
             });
         });
-        if (ovIn) {
-            ovIn.addEventListener('input', toggleReason);
-        }
+        if (ovIn) ovIn.addEventListener('input', toggleReason);
+
+        startIn.addEventListener('change', function() {
+            var item = itemMap[itemSel.value];
+            if (item && (item.pricing_unit === 'DAY' || item.pricing_unit === 'FULL_DAY' || item
+                    .pricing_unit === 'NIGHT')) {
+                if (startIn.value) {
+                    endIn.value = startIn.value;
+                }
+            }
+        });
+
         del.addEventListener('click', function() {
             if (rowsBody.children.length > 1) {
                 tr.remove();
@@ -648,13 +743,10 @@ $jsData  = json_encode([
         tr.appendChild(el('td', {}, [resSel]));
         tr.appendChild(el('td', {}, [startIn]));
         tr.appendChild(el('td', {}, [endIn]));
-        // Tambahkan text-align center agar sejajar dengan header
         tr.appendChild(el('td', {
             style: 'text-align: center;'
         }, [qtyIn]));
-        if (ovIn) {
-            tr.appendChild(el('td', {}, [ovIn]));
-        }
+        if (ovIn) tr.appendChild(el('td', {}, [ovIn]));
         tr.appendChild(resCell);
         tr.appendChild(el('td', {}, [del]));
         rowsBody.appendChild(tr);
@@ -664,15 +756,9 @@ $jsData  = json_encode([
             setInputType(startIn, v.item_id);
             setInputType(endIn, v.item_id);
             resourceOptions(resSel, v.item_id, v.resource_id || null);
-            if (v.start) {
-                startIn.value = v.start;
-            }
-            if (v.end) {
-                endIn.value = v.end;
-            }
-            if (ovIn && v.price_override) {
-                ovIn.value = v.price_override;
-            }
+            if (v.start) startIn.value = v.start;
+            if (v.end) endIn.value = v.end;
+            if (ovIn && v.price_override) ovIn.value = v.price_override;
         } else {
             resourceOptions(resSel, '', null);
         }
@@ -682,14 +768,10 @@ $jsData  = json_encode([
 
     function toggleReason() {
         var box = document.getElementById('reasonBox');
-        if (!box) {
-            return;
-        }
+        if (!box) return;
         var any = false;
         rowsBody.querySelectorAll('[name$="[price_override]"]').forEach(function(i) {
-            if (i.value.trim() !== '') {
-                any = true;
-            }
+            if (i.value.trim() !== '') any = true;
         });
         box.hidden = !any;
         document.getElementById('priceReason').required = any;
@@ -749,12 +831,11 @@ $jsData  = json_encode([
                 text: '✓ Tersedia: ' + names
             }));
         }
+
         if (r.subtotal !== undefined) {
             var line = r.duration + ' ' + (r.unit || '').toLowerCase() + ' · ' + rp(r.unit_price) + ' → ' + rp(r
                 .subtotal);
-            if (r.discount > 0) {
-                line += ' − diskon ' + rp(r.discount);
-            }
+            if (r.discount > 0) line += ' − diskon ' + rp(r.discount);
             cell.appendChild(el('div', {
                 text: line
             }));
@@ -764,18 +845,14 @@ $jsData  = json_encode([
                     text: (l.type === 'SURCHARGE' ? '+ ' : '− ') + l.name + ' ' + rp(l.amount)
                 }));
             });
-            if (r.overridden) {
-                cell.appendChild(el('div', {
-                    class: 'res-warn',
-                    text: 'Harga manual'
-                }));
-            }
-            if (r.deposit > 0) {
-                cell.appendChild(el('div', {
-                    class: 'muted',
-                    text: 'Deposit ' + rp(r.deposit)
-                }));
-            }
+            if (r.overridden) cell.appendChild(el('div', {
+                class: 'res-warn',
+                text: 'Harga manual'
+            }));
+            if (r.deposit > 0) cell.appendChild(el('div', {
+                class: 'muted',
+                text: 'Deposit ' + rp(r.deposit)
+            }));
         }
         (r.warnings || []).forEach(function(w) {
             cell.appendChild(el('div', {
@@ -793,9 +870,8 @@ $jsData  = json_encode([
                 p.append(key, val);
             }
         });
-        if (D.lockBranch) {
-            p.set('branch_id', String(D.lockBranch));
-        }
+        if (D.lockBranch) p.set('branch_id', String(D.lockBranch));
+
         checkMsg.textContent = 'Memeriksa…';
         return fetch(D.checkUrl + '?' + p.toString(), {
                 headers: {
@@ -814,9 +890,7 @@ $jsData  = json_encode([
                     return false;
                 }
                 (j.rows || []).forEach(function(r, i) {
-                    if (trs[i]) {
-                        renderRow(trs[i].querySelector('.res-cell'), r);
-                    }
+                    if (trs[i]) renderRow(trs[i].querySelector('.res-cell'), r);
                 });
                 if (j.totals) {
                     sumBox.hidden = false;
@@ -829,24 +903,29 @@ $jsData  = json_encode([
                     ];
                     rows.forEach(function(x) {
                         if (x[1] !== 0) {
-                            sumBox.appendChild(el('div', {}, [el('span', {
-                                text: x[0]
-                            }), el('span', {
-                                text: (x[1] < 0 ? '− ' : '') + rp(Math.abs(x[1]))
-                            })]));
+                            sumBox.appendChild(el('div', {}, [
+                                el('span', {
+                                    text: x[0]
+                                }),
+                                el('span', {
+                                    text: (x[1] < 0 ? '− ' : '') + rp(Math.abs(x[1]))
+                                })
+                            ]));
                         }
                     });
                     sumBox.appendChild(el('div', {
                         class: 'grand'
-                    }, [el('span', {
-                        text: 'Total'
-                    }), el('span', {
-                        text: rp(j.totals.grand)
-                    })]));
+                    }, [
+                        el('span', {
+                            text: 'Total'
+                        }),
+                        el('span', {
+                            text: rp(j.totals.grand)
+                        })
+                    ]));
                 }
-                if (!j.ok) {
-                    checkMsg.textContent = 'Ada item yang tidak bisa dipesan. Perbaiki sebelum menyimpan.';
-                }
+                if (!j.ok) checkMsg.textContent =
+                    'Ada item yang tidak bisa dipesan. Perbaiki sebelum menyimpan.';
                 return j.ok;
             })
             .catch(function() {
@@ -854,21 +933,19 @@ $jsData  = json_encode([
                 return false;
             });
     }
+
     document.getElementById('checkBtn').addEventListener('click', function() {
-        if (form.reportValidity()) {
-            runCheck();
-        }
+        if (form.reportValidity()) runCheck();
     });
 
     // ---------------- Simpan ----------------
     var saving = false;
     form.querySelectorAll('[data-save]').forEach(function(b) {
         b.addEventListener('click', function() {
-            if (saving) {
-                return;
-            }
+            if (saving) return;
             var action = b.getAttribute('data-save');
             var mode = form.querySelector('[name=customer_mode]:checked').value;
+
             if (mode === 'existing' && !document.getElementById('customerId').value) {
                 alert('Pilih customer terlebih dahulu, atau pilih "Customer baru".');
                 return;
@@ -880,12 +957,10 @@ $jsData  = json_encode([
                     return;
                 }
             }
-            if (!form.reportValidity()) {
+            if (!form.reportValidity()) return;
+            if (action === 'CONFIRMED' && !confirm('Simpan dan langsung CONFIRM booking ini?'))
                 return;
-            }
-            if (action === 'CONFIRMED' && !confirm('Simpan dan langsung CONFIRM booking ini?')) {
-                return;
-            }
+
             saving = true;
             form.querySelectorAll('[data-save]').forEach(function(x) {
                 x.disabled = true;
@@ -898,14 +973,12 @@ $jsData  = json_encode([
     // ---------------- Pulihkan isian setelah gagal simpan ----------------
     function setVal(name, val) {
         var f = form.querySelector('[name="' + name + '"]');
-        if (f && val !== undefined && val !== null) {
-            f.value = val;
-        }
+        if (f && val !== undefined && val !== null) f.value = val;
     }
+
     if (PREFILL && typeof PREFILL === 'object') {
-        if (PREFILL.customer_mode === 'new') {
-            form.querySelector('[name=customer_mode][value=new]').checked = true;
-        }
+        if (PREFILL.customer_mode === 'new') form.querySelector('[name=customer_mode][value=new]').checked = true;
+
         if (PREFILL.customer_id) {
             pick({
                 id: PREFILL.customer_id,
@@ -917,13 +990,12 @@ $jsData  = json_encode([
             picked.lastChild.textContent = 'Dipilih sebelumnya';
         }
         ['new_name', 'new_phone', 'new_email', 'booking_source', 'fulfillment_method', 'pickup_address',
-            'return_address', 'customer_notes', 'internal_notes', 'price_reason'
+            'return_address', 'customer_notes', 'internal_notes', 'price_reason', 'deposit_mode'
         ].forEach(function(k) {
             setVal(k, PREFILL[k]);
         });
-        if (branchSel && !D.lockBranch) {
-            setVal('branch_id', PREFILL.branch_id);
-        }
+        if (branchSel && !D.lockBranch) setVal('branch_id', PREFILL.branch_id);
+
         var list = PREFILL.items ? (Array.isArray(PREFILL.items) ? PREFILL.items : Object.keys(PREFILL.items).map(
             function(k) {
                 return PREFILL.items[k];
@@ -939,34 +1011,40 @@ $jsData  = json_encode([
             });
         });
     }
-    if (!rowsBody.children.length) {
-        addRow();
-    }
+
+    if (!rowsBody.children.length) addRow();
+
     applyMode();
     applyFulfillment();
 
-    // ---------------- Sembunyikan tombol Pending jika BUKAN Admin / WA ----------------
+    // ---------------- Sembunyikan tombol Pending ----------------
     var sourceSel = document.getElementById('source');
     var btnSavePending = document.getElementById('btnSavePending');
 
     function toggleSaveButtons() {
         if (!sourceSel || !btnSavePending) return;
-
-        // Cek apakah sumber yang dipilih BUKAN ADMIN
-        if (sourceSel.value !== 'ADMIN') {
-            // Sembunyikan tombol pending karena Walk-in/Telepon tidak boleh pending
-            btnSavePending.style.display = 'none';
-        } else {
-            // Tampilkan kembali jika memilih Admin / WhatsApp
-            btnSavePending.style.display = 'inline-block';
-        }
+        btnSavePending.style.display = (sourceSel.value !== 'ADMIN') ? 'none' : 'inline-block';
     }
 
-    // Jalankan saat halaman dimuat & saat dropdown diubah
     if (sourceSel && btnSavePending) {
         sourceSel.addEventListener('change', toggleSaveButtons);
-        toggleSaveButtons(); // Panggil saat pertama kali load (antisipasi form gagal simpan/prefill)
+        toggleSaveButtons();
     }
+
+    // ---------------- Listener deposit ----------------
+    var depSel = document.getElementById('depositMode');
+    if (depSel) {
+        depSel.addEventListener('change', clearSummary);
+    }
+
+    // ---------------- Pengunci walk-in ----------------
+    if (sourceSel) {
+        sourceSel.addEventListener('change', function() {
+            toggleSaveButtons();
+            syncFulfillmentForSource();
+        });
+    }
+    syncFulfillmentForSource();
 })();
 </script>
 

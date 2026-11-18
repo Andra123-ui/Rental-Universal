@@ -9,6 +9,7 @@ use CodeIgniter\Exceptions\PageNotFoundException;
 /**
  * CAT-01 Daftar Katalog, CAT-02 Tambah/Edit Item Katalog.
  * Item & resource yang pernah dipakai transaksi tidak pernah di-hard-delete.
+ * Admin cabang hanya mengatur unit (resources) di cabangnya sendiri.
  */
 class ProdukController extends BaseController
 {
@@ -34,9 +35,25 @@ class ProdukController extends BaseController
     private const MEDIA_DIR        = 'uploads/items';
     private const MAX_UNITS_BRANCH = 500;
 
+    /** Nominal deposit default (hardcoded, tanpa tabel setting). */
+    private const DEFAULT_DEPOSIT_AMOUNT = 100000; // Rp 100.000 — ubah sesuai kebijakan
+
     private function businessId(): int
     {
         return (int) (site_business()['id'] ?? 1);
+    }
+
+    private function defaultDepositAmount(): float
+    {
+        return (float) self::DEFAULT_DEPOSIT_AMOUNT;
+    }
+
+    /** Cabang admin yang login; NULL = admin lintas cabang (Owner). */
+    private function adminBranch(): ?int
+    {
+        $b = session()->get('admin_branch_id');
+
+        return $b ? (int) $b : null;
     }
 
     // ===================================================================
@@ -77,21 +94,26 @@ class ProdukController extends BaseController
             $base->where('i.allow_online_booking', (int) $f['online']);
         }
         if ($f['category'] > 0) {
-            // Kategori + semua turunannya
             $ids = array_merge([$f['category']], CategoryTree::descendantIds($allCats, $f['category']));
             $base->whereIn('i.category_id', $ids);
         }
 
         $total = (clone $base)->countAllResults();
 
+        // Admin cabang: jumlah unit dan nama cabang hanya dari cabangnya
+        $bid = $this->adminBranch();
+        $rw  = $bid ? ' AND r.branch_id = ' . $bid : '';
+        $r2w = $bid ? ' AND r2.branch_id = ' . $bid : '';
+
         $rows = $base
             ->select('i.id, i.sku, i.name, i.item_type, i.rental_mode, i.pricing_unit, i.base_price, i.unit_label,
                       i.allow_online_booking, i.status,
+                      i.deposit_required, i.deposit_amount,
                       c.name AS category_name, j.name AS jenis_name,
                       (SELECT m.file_path FROM item_media m WHERE m.catalog_item_id = i.id AND m.media_type = "IMAGE"
                         ORDER BY m.is_primary DESC, m.sort_order ASC, m.id ASC LIMIT 1) AS thumb,
-                      (SELECT COUNT(*) FROM resources r WHERE r.catalog_item_id = i.id AND r.deleted_at IS NULL) AS resource_count,
-                      (SELECT GROUP_CONCAT(DISTINCT b.branch_name SEPARATOR ", ") FROM resources r2 JOIN branches b ON b.id = r2.branch_id WHERE r2.catalog_item_id = i.id AND r2.deleted_at IS NULL) AS branch_names', false)
+                      (SELECT COUNT(*) FROM resources r WHERE r.catalog_item_id = i.id AND r.deleted_at IS NULL' . $rw . ') AS resource_count,
+                      (SELECT GROUP_CONCAT(DISTINCT b.branch_name SEPARATOR ", ") FROM resources r2 JOIN branches b ON b.id = r2.branch_id WHERE r2.catalog_item_id = i.id AND r2.deleted_at IS NULL' . $r2w . ') AS branch_names', false)
             ->orderBy('i.created_at', 'DESC')
             ->limit(self::PER_PAGE, ($page - 1) * self::PER_PAGE)
             ->get()->getResultArray();
@@ -106,6 +128,7 @@ class ProdukController extends BaseController
             'total'           => $total,
             'categoryOptions' => CategoryTree::flatten($allCats),
             'itemTypes'       => self::ITEM_TYPES,
+            'defaultDeposit'  => $this->defaultDepositAmount(),
         ]);
     }
 
@@ -143,7 +166,7 @@ class ProdukController extends BaseController
     }
 
     // ===================================================================
-    // Duplicate: salin item + komponen paket + aturan harga (TANPA media & resource)
+    // Duplicate
     // ===================================================================
     public function duplicate(string $hash)
     {
@@ -156,8 +179,8 @@ class ProdukController extends BaseController
             $copy = $src;
             unset($copy['id'], $copy['created_at'], $copy['updated_at']);
             $copy['name']       = mb_substr($src['name'], 0, 165) . ' (Salinan)';
-            $copy['sku']        = null;            // SKU harus unik
-            $copy['status']     = 'INACTIVE';      // tidak langsung tampil di katalog
+            $copy['sku']        = null;
+            $copy['status']     = 'INACTIVE';
             $copy['deleted_at'] = null;
             $db->table('catalog_items')->insert($copy);
             $newId = (int) $db->insertID();
@@ -191,7 +214,7 @@ class ProdukController extends BaseController
     }
 
     // ===================================================================
-    // Media: upload / primary / up / down / delete / alt
+    // Media
     // ===================================================================
     public function media(string $hash)
     {
@@ -218,7 +241,7 @@ class ProdukController extends BaseController
             $skipped = [];
             foreach ($files as $file) {
                 if (!$file->isValid() || $file->hasMoved()) {
-                    continue; // input kosong
+                    continue;
                 }
                 if ($count + $added >= self::MEDIA_MAX_ITEM) {
                     $skipped[] = 'batas ' . self::MEDIA_MAX_ITEM . ' gambar per produk tercapai';
@@ -254,7 +277,6 @@ class ProdukController extends BaseController
             return $back->with('success', $msg);
         }
 
-        // Aksi lain butuh media milik item ini
         $m = $db->table('item_media')->where('id', $mediaId)->where('catalog_item_id', $id)->get()->getRowArray();
         if (!$m) {
             return $back->with('error', 'Media tidak ditemukan.');
@@ -290,14 +312,12 @@ class ProdukController extends BaseController
             case 'delete':
                 $db->table('item_media')->where('id', $mediaId)->delete();
 
-                // File fisik dihapus hanya kalau tidak dipakai baris lain
                 $path = (string) $m['file_path'];
                 $used = $db->table('item_media')->where('file_path', $path)->countAllResults();
                 if ($used === 0 && strpos($path, self::MEDIA_DIR . '/') === 0 && strpos($path, '..') === false) {
                     @unlink(FCPATH . $path);
                 }
 
-                // Pastikan selalu ada foto utama
                 $hasPrimary = $db->table('item_media')->where('catalog_item_id', $id)->where('is_primary', 1)->countAllResults();
                 if (!$hasPrimary) {
                     $first = $db->table('item_media')->select('id')->where('catalog_item_id', $id)->orderBy('sort_order')->orderBy('id')->get(1)->getRowArray();
@@ -316,25 +336,32 @@ class ProdukController extends BaseController
     // ===================================================================
     private function form(?array $item)
     {
-        $db = db_connect();
+        $db  = db_connect();
+        $bid = $this->adminBranch();
 
-        $branches = $db->table('branches')->where('is_active', 1)->orderBy('branch_name')->get()->getResultArray();
+        // Admin cabang hanya melihat cabangnya sendiri
+        $bq = $db->table('branches')->where('is_active', 1);
+        if ($bid) {
+            $bq->where('id', $bid);
+        }
+        $branches = $bq->orderBy('branch_name')->get()->getResultArray();
 
         $selectedBranches = [];
         $media = [];
         if ($item) {
-            $selectedBranches = $db->table('resources')
+            $sq = $db->table('resources')
                 ->select('branch_id, COUNT(id) as total_unit')
                 ->where('catalog_item_id', $item['id'])
-                ->where('deleted_at', null)
-                ->groupBy('branch_id')
-                ->get()->getResultArray();
+                ->where('deleted_at', null);
+            if ($bid) {
+                $sq->where('branch_id', $bid);
+            }
+            $selectedBranches = $sq->groupBy('branch_id')->get()->getResultArray();
 
             $media = $db->table('item_media')->where('catalog_item_id', $item['id'])
                 ->orderBy('sort_order')->orderBy('id')->get()->getResultArray();
         }
 
-        // Kategori aktif (atau kategori item ini sendiri) dalam bentuk pohon
         $cats = CategoryTree::flatten($db->table('categories')->orderBy('sort_order')->get()->getResultArray());
         $cats = array_values(array_filter($cats, static fn ($c) => (int) $c['is_active'] === 1
             || ($item && (int) $item['category_id'] === (int) $c['id'])));
@@ -350,8 +377,9 @@ class ProdukController extends BaseController
             'pricingUnits'     => self::PRICING_UNITS,
             'branches'         => $branches,
             'selectedBranches' => $selectedBranches,
+            'lockBranch'       => $bid,
             'media'            => $media,
-            // Isi setelah halamannya dibuat, mis. site_url('backoffice/pricing-rules?item=' . $hash)
+            'defaultDeposit'   => $this->defaultDepositAmount(),
             'priceUrl'         => null,
             'packageUrl'       => null,
         ]);
@@ -383,6 +411,7 @@ class ProdukController extends BaseController
             'track_stock'           => 'permit_empty|in_list[0,1]',
             'allow_online_booking'  => 'required|in_list[0,1]',
             'deposit_required'      => 'required|in_list[0,1]',
+            'deposit_mode'          => 'permit_empty|in_list[default,manual]',
             'deposit_amount'        => 'permit_empty|numeric|greater_than_equal_to[0]',
             'status'                => 'required|in_list[ACTIVE,INACTIVE]',
         ])) {
@@ -390,6 +419,7 @@ class ProdukController extends BaseController
         }
 
         $db         = db_connect();
+        $lock       = $this->adminBranch();
         $type       = (string) $this->request->getPost('item_type');
         $mode       = (string) $this->request->getPost('rental_mode');
         $unit       = (string) $this->request->getPost('pricing_unit');
@@ -408,7 +438,6 @@ class ProdukController extends BaseController
             return $back->with('errors', [$err]);
         }
 
-        // Kategori: aktif, atau tetap kategori lama item ini
         $cat = $db->table('categories')->where('id', $categoryId)->get()->getRowArray();
         $sameAsBefore = $item && (int) $item['category_id'] === $categoryId;
         if (!$cat || ((int) $cat['is_active'] !== 1 && !$sameAsBefore)) {
@@ -430,25 +459,41 @@ class ProdukController extends BaseController
             }
         }
 
-        // Distribusi cabang & unit
+        // ---- Distribusi unit per cabang ----
         $dist = [];
         $branchesPost = $this->request->getPost('branches') ?? [];
         $unitsPost    = $this->request->getPost('units') ?? [];
-        if (is_array($branchesPost)) {
-            foreach ($branchesPost as $i => $bid) {
-                $bid = (int) $bid;
-                $n   = (int) ($unitsPost[$i] ?? 0);
-                if ($bid <= 0 || $n <= 0) {
+        $branchesPost = is_array($branchesPost) ? $branchesPost : [];
+        $unitsPost    = is_array($unitsPost) ? $unitsPost : [];
+
+        // Admin cabang: baris tanpa cabang dianggap cabangnya sendiri; cabang lain ditolak
+        $rowKeys = $lock ? array_keys($unitsPost) : array_keys($branchesPost);
+        foreach ($rowKeys as $i) {
+            $bid = (int) ($branchesPost[$i] ?? 0);
+            $n   = (int) ($unitsPost[$i] ?? 0);
+
+            if ($lock) {
+                if ($bid <= 0) {
+                    $bid = $lock;
+                }
+                if ($bid !== $lock) {
+                    if ($n > 0) {
+                        return $back->with('errors', ['Anda hanya boleh mengatur unit untuk cabang Anda sendiri.']);
+                    }
                     continue;
                 }
-                if (isset($dist[$bid])) {
-                    return $back->with('errors', ['Cabang yang sama dipilih lebih dari sekali. Gabungkan jumlah unitnya jadi satu baris.']);
-                }
-                if ($n > self::MAX_UNITS_BRANCH) {
-                    return $back->with('errors', ['Jumlah unit per cabang maksimal ' . self::MAX_UNITS_BRANCH . '.']);
-                }
-                $dist[$bid] = $n;
             }
+
+            if ($bid <= 0 || $n <= 0) {
+                continue;
+            }
+            if (isset($dist[$bid])) {
+                return $back->with('errors', ['Cabang yang sama dipilih lebih dari sekali. Gabungkan jumlah unitnya jadi satu baris.']);
+            }
+            if ($n > self::MAX_UNITS_BRANCH) {
+                return $back->with('errors', ['Jumlah unit per cabang maksimal ' . self::MAX_UNITS_BRANCH . '.']);
+            }
+            $dist[$bid] = $n;
         }
         if ($dist) {
             $okBranch = $db->table('branches')->whereIn('id', array_keys($dist))->where('is_active', 1)->countAllResults();
@@ -457,7 +502,27 @@ class ProdukController extends BaseController
             }
         }
 
+        // ===== DEPOSIT (tanpa kolom baru) =====
         $depositRequired = (int) $this->request->getPost('deposit_required');
+        $depositModeRaw  = (string) ($this->request->getPost('deposit_mode') ?? 'default');
+        $depositInput    = (float) ($this->request->getPost('deposit_amount') ?? 0);
+
+        if ($depositRequired === 1) {
+            if ($depositModeRaw === 'manual') {
+                $depositAmount = $depositInput;
+                if ($depositAmount <= 0) {
+                    return $back->with('errors', ['Nominal deposit manual harus lebih dari 0.']);
+                }
+            } else {
+                $depositAmount = $this->defaultDepositAmount();
+                if ($depositAmount <= 0) {
+                    return $back->with('errors', ['Nominal deposit default belum diatur (Rp 0). Hubungi admin.']);
+                }
+            }
+        } else {
+            $depositAmount = 0.0;
+        }
+        // ===== END DEPOSIT =====
 
         $data = [
             'category_id'           => $categoryId,
@@ -478,7 +543,7 @@ class ProdukController extends BaseController
             'track_stock'           => $mode === 'UNLIMITED' ? 0 : (int) ($this->request->getPost('track_stock') ?? 1),
             'allow_online_booking'  => (int) $this->request->getPost('allow_online_booking'),
             'deposit_required'      => $depositRequired,
-            'deposit_amount'        => $depositRequired ? (float) $this->request->getPost('deposit_amount') : 0,
+            'deposit_amount'        => $depositAmount,
             'status'                => $this->request->getPost('status'),
         ];
 
@@ -493,9 +558,8 @@ class ProdukController extends BaseController
                 $productId = (int) $db->insertID();
             }
 
-            // Paket memakai package_components; mode tanpa batas tidak butuh unit
             if ($type !== 'PACKAGE' && $mode !== 'UNLIMITED') {
-                $this->syncResources($db, $productId, $data, $dist, $sku ?: ('ITM' . $productId));
+                $this->syncResources($db, $productId, $data, $dist, $sku ?: ('ITM' . $productId), $lock);
             }
 
             $db->transCommit();
@@ -515,7 +579,6 @@ class ProdukController extends BaseController
                 ->with('success', $msg . ' Atur cabang & unit di bawah.');
         }
         if (!$item) {
-            // Produk baru: lanjut ke edit supaya bisa unggah media
             return redirect()->to(site_url('backoffice/produk/ubah/' . id_encode($productId)) . '#media')
                 ->with('success', $msg . ' Tambahkan foto produk di bawah.');
         }
@@ -524,11 +587,10 @@ class ProdukController extends BaseController
     }
 
     /**
-     * Samakan jumlah unit aktif per cabang dengan permintaan form.
-     * Tambah jika kurang; kurangi dengan soft delete (tidak pernah hard delete),
-     * dan tolak jika unit masih dipakai booking aktif.
+     * Samakan jumlah unit per cabang dengan $dist.
+     * $onlyBranch (admin cabang): HANYA cabang itu yang disentuh, unit cabang lain tidak dihapus/ditambah.
      */
-    private function syncResources($db, int $itemId, array $data, array $dist, string $prefix): void
+    private function syncResources($db, int $itemId, array $data, array $dist, string $prefix, ?int $onlyBranch = null): void
     {
         $now = date('Y-m-d H:i:s');
 
@@ -542,9 +604,13 @@ class ProdukController extends BaseController
         $capacity = $data['rental_mode'] === 'CAPACITY' ? (float) $data['default_capacity'] : 1;
         $resType  = $data['item_type'] === 'SERVICE' ? 'PERSON' : 'EQUIPMENT';
 
-        foreach (array_unique(array_merge(array_keys($dist), array_keys($byBranch))) as $bid) {
+        $branchIds = $onlyBranch !== null
+            ? [$onlyBranch]
+            : array_unique(array_merge(array_keys($dist), array_keys($byBranch)));
+
+        foreach ($branchIds as $bid) {
             if ($bid === 0) {
-                continue; // resource tanpa cabang tidak disentuh
+                continue;
             }
 
             $want = $dist[$bid] ?? 0;
@@ -576,7 +642,6 @@ class ProdukController extends BaseController
                 foreach ($have as $r) {
                     $flags[(int) $r['id']] = $this->allocCount($db, (int) $r['id']) > 0;
                 }
-                // Utamakan unit tanpa riwayat, lalu yang terbaru
                 usort($have, static fn ($a, $b) => [$flags[(int) $a['id']], -(int) $a['id']] <=> [$flags[(int) $b['id']], -(int) $b['id']]);
 
                 $removed = 0;
@@ -600,10 +665,12 @@ class ProdukController extends BaseController
             }
         }
 
-        // Mode kapasitas: semua unit aktif ikut kapasitas default terbaru
         if ($data['rental_mode'] === 'CAPACITY') {
-            $db->table('resources')->where('catalog_item_id', $itemId)->where('deleted_at', null)
-                ->update(['capacity' => $capacity, 'updated_at' => $now]);
+            $cq = $db->table('resources')->where('catalog_item_id', $itemId)->where('deleted_at', null);
+            if ($onlyBranch !== null) {
+                $cq->where('branch_id', $onlyBranch);
+            }
+            $cq->update(['capacity' => $capacity, 'updated_at' => $now]);
         }
     }
 
@@ -621,7 +688,6 @@ class ProdukController extends BaseController
         return (int) $db->table('booking_resource_allocations')->where('resource_id', $resourceId)->countAllResults();
     }
 
-    /** Validasi kombinasi item_type / rental_mode / pricing_unit. */
     private function comboError(string $type, string $mode, string $unit, ?float $capacity): ?string
     {
         if ($type === 'PACKAGE' && !in_array($mode, ['SCHEDULE', 'UNLIMITED'], true)) {

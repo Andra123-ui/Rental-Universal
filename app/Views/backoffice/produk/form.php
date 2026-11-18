@@ -13,14 +13,29 @@ $sel = fn (string $k, $val, $d = '') => (string) old($k, $item[$k] ?? $d) === (s
 
 $trim = static fn ($n) => $n === null || $n === '' ? '' : rtrim(rtrim(number_format((float) $n, 2, '.', ''), '0'), '.');
 $price    = old('base_price', isset($item['base_price']) ? (int) $item['base_price'] : '');
-$deposit  = old('deposit_amount', isset($item['deposit_amount']) ? (int) $item['deposit_amount'] : '');
 $minDur   = old('min_duration', $trim($item['min_duration'] ?? null));
 $maxDur   = old('max_duration', $trim($item['max_duration'] ?? null));
 $capacity = old('default_capacity', $trim($item['default_capacity'] ?? null));
 
 $curType = (string) old('item_type', $item['item_type'] ?? 'ITEM');
-?>
 
+// ===== DEPOSIT: tentukan mode dari POST, atau dari data tersimpan (tanpa kolom DB) =====
+$savedDeposit  = (float) ($item['deposit_amount'] ?? 0);
+$savedRequired = (string) ($item['deposit_required'] ?? '0');
+
+$depositModeCur = old('deposit_mode');
+if ($depositModeCur === null && $isEdit && $savedRequired === '1') {
+    // tanpa kolom deposit_mode: tebak dari nominal
+    $depositModeCur = ($savedDeposit > 0 && (float) $savedDeposit !== (float) $defaultDeposit)
+        ? 'manual' : 'default';
+}
+$depositModeCur = $depositModeCur ?? 'default';
+
+$deposit = old('deposit_amount', $isEdit
+    ? (int) $item['deposit_amount']
+    : ($depositModeCur === 'default' ? (int) $defaultDeposit : '')
+);
+?>
 <style>
 .sec-title {
     grid-column: 1 / -1;
@@ -229,10 +244,24 @@ $curType = (string) old('item_type', $item['item_type'] ?? 'ITEM');
                     <option value="1" <?= $sel('deposit_required', '1', '0') ?>>Ada</option>
                 </select>
             </div>
-            <div>
+
+            <div id="deposit-mode-wrap">
+                <label for="deposit_mode">Cara isi nominal</label>
+                <select id="deposit_mode" name="deposit_mode">
+                    <option value="default" <?= $depositModeCur === 'default' ? 'selected' : '' ?>>
+                        Pakai nominal default (Rp <?= number_format((float) $defaultDeposit, 0, ',', '.') ?>)
+                    </option>
+                    <option value="manual" <?= $depositModeCur === 'manual' ? 'selected' : '' ?>>
+                        Isi manual
+                    </option>
+                </select>
+            </div>
+
+            <div id="deposit-amount-wrap">
                 <label for="deposit_amount">Nominal deposit (Rp)</label>
                 <input type="number" id="deposit_amount" name="deposit_amount" min="0" step="1000"
-                    value="<?= esc((string) $deposit, 'attr') ?>">
+                    value="<?= esc((string) (int) $deposit, 'attr') ?>">
+                <div class="hint" id="deposit-hint"></div>
             </div>
 
             <div class="sec-title">Visibilitas</div>
@@ -418,6 +447,11 @@ $curType = (string) old('item_type', $item['item_type'] ?? 'ITEM');
     const unitHint = document.getElementById('unit-hint');
     const unitNa = document.getElementById('unit-na');
     const addBtn = document.getElementById('add-branch-row');
+    const depMode = document.getElementById('deposit_mode');
+    const depModeWrap = document.getElementById('deposit-mode-wrap');
+    const depAmountWrap = document.getElementById('deposit-amount-wrap');
+    const depHint = document.getElementById('deposit-hint');
+    const DEFAULT_DEPOSIT = <?= (int) $defaultDeposit ?>;
 
     const HINTS = {
         SERIALIZED: 'Tiap unit punya identitas sendiri (mobil, kamera). Jumlah unit = stok.',
@@ -440,14 +474,33 @@ $curType = (string) old('item_type', $item['item_type'] ?? 'ITEM');
     }
 
     function syncDeposit() {
-        depAmt.disabled = depReq.value !== '1';
-        if (depAmt.disabled) depAmt.value = '';
+        const required = depReq.value === '1';
+
+        depModeWrap.hidden = !required;
+        depAmountWrap.hidden = !required;
+
+        if (!required) {
+            depAmt.value = '';
+            depHint.textContent = '';
+            return;
+        }
+
+        if (depMode.value === 'default') {
+            depAmt.value = DEFAULT_DEPOSIT;
+            depAmt.readOnly = true;
+            depHint.textContent = 'Nominal otomatis dari pengaturan default. Pilih "Isi manual" untuk mengubah.';
+        } else {
+            depAmt.readOnly = false;
+            if (String(depAmt.value) === String(DEFAULT_DEPOSIT) || depAmt.value === '') {
+                depAmt.value = '';
+            }
+            depHint.textContent = 'Isi nominal deposit manual untuk produk ini.';
+        }
     }
 
     function syncMode() {
         const t = type.value;
 
-        // Opsi mode yang boleh untuk tipe terpilih
         Array.from(mode.options).forEach(function(o) {
             let ok = true;
             if (t === 'PACKAGE') ok = (o.value === 'SCHEDULE' || o.value === 'UNLIMITED');
@@ -483,6 +536,7 @@ $curType = (string) old('item_type', $item['item_type'] ?? 'ITEM');
         syncJenis(true);
     });
     depReq.addEventListener('change', syncDeposit);
+    depMode.addEventListener('change', syncDeposit); // <-- FIX: listener untuk mode
     type.addEventListener('change', syncMode);
     mode.addEventListener('change', syncMode);
     syncJenis(false);

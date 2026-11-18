@@ -5,10 +5,6 @@ namespace App\Controllers\Backoffice;
 use App\Controllers\BaseController;
 use App\Libraries\BookingMoney;
 
-/**
- * BOOK-02 — Detail Booking
- * Confirm & Cancel tetap ada di BookingController (dipakai juga oleh daftar booking).
- */
 class BookingDetailController extends BaseController
 {
     private const CLOSED = ['CANCELLED', 'EXPIRED'];
@@ -89,7 +85,66 @@ class BookingDetailController extends BaseController
         }
         unset($c);
 
-        $deposit = $db->table('security_deposits')->where('booking_id', $id)->get()->getRowArray();
+        // === Riwayat transaksi deposit — HANYA dari payments ===
+        $depositPayments = $db->table('payments p')
+            ->select('p.*, u.name AS received_by')
+            ->join('users u', 'u.id = p.received_by_user_id', 'left')
+            ->where('p.booking_id', $id)
+            ->where('p.payment_type', 'DEPOSIT')
+            ->orderBy('p.paid_at', 'ASC')->orderBy('p.id', 'ASC')
+            ->get()->getResultArray();
+        foreach ($depositPayments as &$dp) {
+            $dp['enc'] = id_encode((int) $dp['id']);
+        }
+        unset($dp);
+
+        $depIn  = 0.0;
+        $depOut = 0.0;
+        foreach ($depositPayments as $dp) {
+            if (strtoupper((string) $dp['status']) !== 'PAID') {
+                continue;
+            }
+            if (strtoupper((string) $dp['direction']) === 'OUT') {
+                $depOut += (float) $dp['amount'];
+            } else {
+                $depIn += (float) $dp['amount'];
+            }
+        }
+
+        // Potongan deposit dihitung dari kerusakan yang sudah dibebankan
+        $depWithheld = (float) ($db->table('damages')
+            ->selectSum('charged_amount', 'total')
+            ->where('booking_id', $id)
+            ->whereIn('status', ['CHARGED', 'INVOICED', 'PAID'])
+            ->get()->getRow('total') ?? 0);
+
+        $depRequired = (float) $bk['deposit_total'];
+        $depNet      = max(0.0, $depRequired - $depWithheld);
+        $depRefunded = $depOut;
+        $depPending  = max(0.0, $depNet - $depRefunded);
+
+        if ($depRequired <= 0) {
+            $depStatus = 'NONE';
+        } elseif ($depPending <= 0.01) {
+            $depStatus = 'REFUNDED';
+        } elseif ($depRefunded > 0) {
+            $depStatus = 'PARTIAL';
+        } elseif ($depIn > 0) {
+            $depStatus = 'HELD';
+        } else {
+            $depStatus = 'PENDING';
+        }
+
+        $depSummary = [
+            'required' => $depRequired,
+            'held'     => $depIn,
+            'withheld' => $depWithheld,
+            'refunded' => $depRefunded,
+            'pending'  => $depPending,
+            'status'   => $depStatus,
+        ];
+
+        $deposit = null; // kompatibilitas view lama — tidak dipakai lagi
 
         $assignments = $db->table('assignments')->where('booking_id', $id)->orderBy('id', 'DESC')->get()->getResultArray();
         foreach ($assignments as &$s) {
@@ -116,7 +171,6 @@ class BookingDetailController extends BaseController
         $documents = $db->table('booking_documents')->where('booking_id', $id)->orderBy('id', 'DESC')->get()->getResultArray();
         $damages   = $db->table('damages')->where('booking_id', $id)->orderBy('id', 'DESC')->get()->getResultArray();
 
-        // ---- Riwayat gabungan: perubahan status + log aktivitas booking ----
         $timeline = [[
             'at' => $bk['created_at'], 'title' => 'Booking dibuat',
             'sub' => 'Sumber ' . $bk['booking_source'], 'who' => $createdBy ?: 'Customer',
@@ -148,11 +202,14 @@ class BookingDetailController extends BaseController
         }
         usort($timeline, static fn ($a, $b) => strcmp($b['at'], $a['at']));
 
-        $users = $db->table('users u')
+        $uq = $db->table('users u')
             ->select('u.id, u.name, r.name AS role_name')
             ->join('roles r', 'r.id = u.role_id')
-            ->where('u.status', 'ACTIVE')->where('u.deleted_at', null)
-            ->orderBy('u.name')->get()->getResultArray();
+            ->where('u.status', 'ACTIVE')->where('u.deleted_at', null);
+        if (!empty($bk['branch_id'])) {
+            $uq->groupStart()->where('u.branch_id', (int) $bk['branch_id'])->orWhere('u.branch_id', null)->groupEnd();
+        }
+        $users = $uq->orderBy('u.name')->get()->getResultArray();
 
         $st   = $bk['status'];
         $open = !in_array($st, self::CLOSED, true);
@@ -177,42 +234,44 @@ class BookingDetailController extends BaseController
         }
 
         return view('backoffice/booking/show', [
-            'title'         => $bk['invoice_no'],
-            'nav'           => 'booking',
-            'seg'           => $seg,
-            'bk'            => $bk,
-            'customer'      => $customer,
-            'account'       => $account,
-            'doc'           => $doc,
-            'branch'        => $branch,
-            'createdBy'     => $createdBy,
-            'items'         => $items,
-            'allocs'        => $allocs,
-            'activeAlloc'   => $activeAlloc,
-            'payments'      => $payments,
-            'legacyPaid'    => $paidRows === 0 && (float) $bk['paid_total'] > 0,
-            'charges'       => $charges,
-            'deposit'       => $deposit,
-            'assignments'   => $assignments,
-            'handovers'     => $handovers,
-            'documents'     => $documents,
-            'damages'       => $damages,
-            'timeline'      => $timeline,
-            'users'         => $users,
-            'can'           => $can,
-            'payMethods'    => self::PAY_METHODS,
-            'payTypes'      => self::PAY_TYPES,
-            'chargeTypes'   => self::CHARGE_TYPES,
-            'assignTypes'   => self::ASSIGN_TYPES,
-            'conditions'    => self::CONDITIONS,
-            'rescheduleUrl' => ($this->may('booking.update') && in_array($st, ['PENDING', 'CONFIRMED'], true))
+            'title'           => $bk['invoice_no'],
+            'nav'             => 'booking',
+            'seg'             => $seg,
+            'bk'              => $bk,
+            'customer'        => $customer,
+            'account'         => $account,
+            'doc'             => $doc,
+            'branch'          => $branch,
+            'createdBy'       => $createdBy,
+            'items'           => $items,
+            'allocs'          => $allocs,
+            'activeAlloc'     => $activeAlloc,
+            'payments'        => $payments,
+            'legacyPaid'      => $paidRows === 0 && (float) $bk['paid_total'] > 0,
+            'charges'         => $charges,
+            'deposit'         => $deposit,
+            'depositPayments' => $depositPayments,
+            'depSummary'      => $depSummary,
+            'assignments'     => $assignments,
+            'handovers'       => $handovers,
+            'documents'       => $documents,
+            'damages'         => $damages,
+            'timeline'        => $timeline,
+            'users'           => $users,
+            'can'             => $can,
+            'payMethods'      => self::PAY_METHODS,
+            'payTypes'        => self::PAY_TYPES,
+            'chargeTypes'     => self::CHARGE_TYPES,
+            'assignTypes'     => self::ASSIGN_TYPES,
+            'conditions'      => self::CONDITIONS,
+            'rescheduleUrl'   => ($this->may('booking.update') && in_array($st, ['PENDING', 'CONFIRMED'], true))
                 ? site_url('backoffice/bookings/' . $seg . '/ubah') : null,
-            'invoiceUrl'    => site_url('backoffice/bookings/' . $seg . '/invoice'),
+            'invoiceUrl'      => site_url('backoffice/bookings/' . $seg . '/invoice'),
         ]);
     }
 
     // ===================================================================
-    // GET /backoffice/bookings/{id}/invoice  (halaman cetak)
+    // GET /backoffice/bookings/{id}/invoice
     // ===================================================================
     public function invoice(string $seg)
     {
@@ -236,7 +295,7 @@ class BookingDetailController extends BaseController
     }
 
     // ===================================================================
-    // POST /backoffice/bookings/{id}/payment   (direction IN = terima, OUT = refund)
+    // POST /backoffice/bookings/{id}/payment
     // ===================================================================
     public function payment(string $seg)
     {
@@ -263,6 +322,7 @@ class BookingDetailController extends BaseController
             if ($dir === 'OUT' && !$this->may('payment.refund')) {
                 throw new \DomainException('Anda tidak punya izin membuat refund (payment.refund).');
             }
+
             if ($dir === 'IN') {
                 if (in_array($bk['status'], self::CLOSED, true)) {
                     throw new \DomainException('Booking sudah ' . $bk['status'] . ', tidak bisa menerima pembayaran.');
@@ -279,12 +339,13 @@ class BookingDetailController extends BaseController
                 if ($amount > (float) $bk['paid_total'] + 0.009) {
                     throw new \DomainException('Refund melebihi total yang sudah dibayar (Rp ' . number_format((float) $bk['paid_total'], 0, ',', '.') . ').');
                 }
-                $type = 'REFUND';
+                $rawType = (string) $this->request->getPost('payment_type');
+                $type    = ($rawType === 'DEPOSIT') ? 'DEPOSIT' : 'REFUND';
             }
 
-            // Pastikan saldo lama (bookings.paid_total tanpa riwayat) tidak hilang saat dihitung ulang
             $this->money()->ensureLegacy($bk);
 
+            $paidAt = $this->parseDt($this->request->getPost('paid_at')) ?? date('Y-m-d H:i:s');
             $this->conn->table('payments')->insert([
                 'booking_id'          => $id,
                 'payment_no'          => $this->paymentNo(),
@@ -295,12 +356,13 @@ class BookingDetailController extends BaseController
                 'reference_no'        => $this->str('reference_no', 120),
                 'amount'              => $amount,
                 'status'              => 'PAID',
-                'paid_at'             => $this->parseDt($this->request->getPost('paid_at')) ?? date('Y-m-d H:i:s'),
+                'paid_at'             => $paidAt,
                 'received_by_user_id' => $this->uid(),
                 'notes'               => $this->str('notes', 255),
             ]);
 
-            // Staff sudah mencatat pembayaran: hentikan batas waktu hold supaya tidak ikut kedaluwarsa
+            // Tidak ada syncSecurityDeposit — deposit dihitung dari payments
+
             if ($dir === 'IN' && $bk['status'] === 'PENDING') {
                 $this->conn->table('bookings')->where('id', $id)->update(['expires_at' => null]);
             }
@@ -308,7 +370,8 @@ class BookingDetailController extends BaseController
             $this->money()->recalc($id);
             $label = $dir === 'IN' ? 'Pembayaran' : 'Refund';
             $this->logActivity('BOOKING_PAYMENT', $id, $dir === 'IN' ? 'payment_in' : 'payment_out',
-                "{$label} Rp " . number_format($amount, 0, ',', '.') . " ({$method}) untuk {$bk['invoice_no']}");
+                "{$label} Rp " . number_format($amount, 0, ',', '.') . " ({$method}) untuk {$bk['invoice_no']}"
+                . ($type === 'DEPOSIT' ? ' — Deposit' : ''));
 
             return "{$label} Rp " . number_format($amount, 0, ',', '.') . ' dicatat.';
         });
@@ -350,9 +413,10 @@ class BookingDetailController extends BaseController
 
             if ($approve) {
                 $this->money()->ensureLegacy($bk);
+                $paidAt = $pay['paid_at'] ?: date('Y-m-d H:i:s');
                 $this->conn->table('payments')->where('id', $pay['id'])->update([
                     'status'              => 'PAID',
-                    'paid_at'             => $pay['paid_at'] ?: date('Y-m-d H:i:s'),
+                    'paid_at'             => $paidAt,
                     'received_by_user_id' => $this->uid(),
                 ]);
                 $this->money()->recalc($id);
@@ -440,7 +504,6 @@ class BookingDetailController extends BaseController
                 throw new \DomainException('Biaya tidak ditemukan atau sudah dibatalkan.');
             }
 
-            // Tidak dihapus: hanya ditandai VOID supaya histori tetap ada
             $this->conn->table('booking_charges')->where('id', $ch['id'])->update(['status' => 'WAIVED']);
             $this->money()->recalc($id);
             $this->logActivity('BOOKING_CHARGE', $id, 'charge_void',
@@ -480,10 +543,14 @@ class BookingDetailController extends BaseController
                 throw new \DomainException('Waktu selesai tidak boleh sebelum waktu mulai.');
             }
 
-            $user = $this->conn->table('users')->select('id, name')->where('id', $userId)
-                ->where('status', 'ACTIVE')->where('deleted_at', null)->get()->getRowArray();
+            $uq = $this->conn->table('users')->select('id, name')->where('id', $userId)
+                ->where('status', 'ACTIVE')->where('deleted_at', null);
+            if (!empty($bk['branch_id'])) {
+                $uq->groupStart()->where('branch_id', (int) $bk['branch_id'])->orWhere('branch_id', null)->groupEnd();
+            }
+            $user = $uq->get()->getRowArray();
             if (!$user) {
-                throw new \DomainException('Petugas tidak ditemukan atau tidak aktif.');
+                throw new \DomainException('Petugas tidak ditemukan, tidak aktif, atau bukan staf cabang ini.');
             }
 
             $this->conn->table('assignments')->insert([
@@ -571,7 +638,6 @@ class BookingDetailController extends BaseController
                 throw new \DomainException('Booking tidak punya item aktif.');
             }
 
-            // item -> unit yang dialokasikan
             $resByItem = [];
             $al = $this->conn->table('booking_resource_allocations a')
                 ->select('a.booking_item_id, a.resource_id')
@@ -598,30 +664,29 @@ class BookingDetailController extends BaseController
             ]);
             $hid = (int) $this->conn->insertID();
 
-            $rows       = (array) $this->request->getPost('items');
-            $badCount   = 0;
+            $rows     = (array) $this->request->getPost('items');
+            $badCount = 0;
             foreach ($items as $it) {
-                $in   = (array) ($rows[$it['id']] ?? []);
-                $cond = (string) ($in['condition'] ?? 'GOOD');
-                $cond = isset(self::CONDITIONS[$cond]) ? $cond : 'GOOD';
-                $note = isset($in['notes']) ? mb_substr(trim((string) $in['notes']), 0, 1000) : '';
+                $in    = (array) ($rows[$it['id']] ?? []);
+                $cond  = (string) ($in['condition'] ?? 'GOOD');
+                $cond  = isset(self::CONDITIONS[$cond]) ? $cond : 'GOOD';
+                $note  = isset($in['notes']) ? mb_substr(trim((string) $in['notes']), 0, 1000) : '';
                 $meter = $this->num($in['meter'] ?? null);
 
                 $this->conn->table('handover_details')->insert([
-                    'handover_id'     => $hid,
-                    'booking_item_id' => (int) $it['id'],
-                    'resource_id'     => $resByItem[(int) $it['id']] ?? null,
-                    'quantity'        => $it['quantity'],
+                    'handover_id'      => $hid,
+                    'booking_item_id'  => (int) $it['id'],
+                    'resource_id'      => $resByItem[(int) $it['id']] ?? null,
+                    'quantity'         => $it['quantity'],
                     'condition_status' => $cond,
-                    'condition_notes' => $note !== '' ? $note : null,
-                    'meter_value'     => $meter,
-                    'accessory_notes' => isset($in['accessory']) && trim((string) $in['accessory']) !== ''
+                    'condition_notes'  => $note !== '' ? $note : null,
+                    'meter_value'      => $meter,
+                    'accessory_notes'  => isset($in['accessory']) && trim((string) $in['accessory']) !== ''
                         ? mb_substr(trim((string) $in['accessory']), 0, 1000) : null,
-                    'photo_path'      => null,
+                    'photo_path'       => null,
                 ]);
                 $did = (int) $this->conn->insertID();
 
-                // Kondisi tidak baik saat pengembalian -> otomatis jadi laporan kerusakan
                 if ($type === 'RETURN' && $cond !== 'GOOD') {
                     $badCount++;
                     $this->conn->table('damages')->insert([
@@ -653,7 +718,7 @@ class BookingDetailController extends BaseController
     }
 
     // ===================================================================
-    // POST /backoffice/bookings/{id}/note  (catatan internal, hanya menambah)
+    // POST /backoffice/bookings/{id}/note
     // ===================================================================
     public function note(string $seg)
     {
@@ -686,8 +751,6 @@ class BookingDetailController extends BaseController
 
     private function boot(): void
     {
-        // Jika id_encode/id_decode dimuat lewat helper lain, tambahkan helper itu di sini
-        // (samakan dengan BookingController::boot()).
         helper('backoffice');
 
         if (!function_exists('id_encode') || !function_exists('id_decode')) {
@@ -698,7 +761,6 @@ class BookingDetailController extends BaseController
         $this->branchId = session()->get('admin_branch_id') ? (int) session()->get('admin_branch_id') : null;
     }
 
-    /** Izin khusus, atau booking.manage sebagai izin umum. */
     private function may(string $code): bool
     {
         return admin_can($code) || admin_can('booking.manage');
@@ -739,7 +801,6 @@ class BookingDetailController extends BaseController
         return $row;
     }
 
-    /** Jalankan $fn dalam transaksi. DomainException = pesan untuk staff. */
     private function tx(string $seg, string $tab, callable $fn)
     {
         $this->conn->transBegin();

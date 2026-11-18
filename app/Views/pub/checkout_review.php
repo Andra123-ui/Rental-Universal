@@ -42,101 +42,80 @@ $fulfillmentLabels = [
             <div>
                 <h3 style="font-size:1.05rem;margin-bottom:14px;">Data Penyewa</h3>
                 <div class="cart-summary" style="margin-bottom:24px;">
-                    <div class="summary-row"><span>Nama</span><span>
-                            <?= esc($customer['name']) ?>
-                        </span></div>
-                    <div class="summary-row"><span>No. HP</span><span>
-                            <?= esc($customer['phone']) ?>
-                        </span></div>
-                    <div class="summary-row" style="border-bottom:none;"><span>Email</span><span>
-                            <?= esc($customer['email'] ?: '-') ?>
-                        </span></div>
+                    <div class="summary-row"><span>Nama</span><span><?= esc($customer['name']) ?></span></div>
+                    <div class="summary-row"><span>No. HP</span><span><?= esc($customer['phone']) ?></span></div>
+                    <div class="summary-row" style="border-bottom:none;">
+                        <span>Email</span><span><?= esc($customer['email'] ?: '-') ?></span>
+                    </div>
                 </div>
 
                 <h3 style="font-size:1.05rem;margin-bottom:14px;">Item Booking</h3>
-                <table class="cart-table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Jadwal</th>
-                            <th>Fulfillment</th>
-                            <th>Qty</th>
-                            <th>Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($items as $line): ?>
-                        <tr>
-                            <td>
-                                <strong><?= esc($line['product']['name']) ?></strong>
+                <div class="table-responsive" style="overflow-x: visible !important;">
+                    <table class="cart-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Jadwal</th>
+                                <th>Fulfillment</th>
+                                <th>Qty</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($items as $line): ?>
+                            <tr>
+                                <td>
+                                    <strong><?= esc($line['product']['name']) ?></strong>
 
-                                <?php if (!empty($line['business_name'])): ?>
-                                <div style="font-size:.8rem;color:var(--muted);margin-top:4px;">
-                                    Bisnis: <?= esc($line['business_name']) ?>
-                                </div>
-                                <?php endif; ?>
+                                    <?php if (!empty($line['business_name'])): ?>
+                                    <div style="font-size:.8rem;color:var(--muted);margin-top:4px;">
+                                        Bisnis: <?= esc($line['business_name']) ?>
+                                    </div>
+                                    <?php endif; ?>
 
-                                <div style="font-size:.8rem;color:var(--muted);">
-                                    Cabang:
-                                    <?= !empty($line['branch_name']) ? esc($line['branch_name']) : 'Semua cabang' ?>
-                                </div>
-
-                                <?php if (!empty($line['product']['description'])): ?>
-                                <p
-                                    style="margin:6px 0 0;font-size:.8rem;color:var(--muted);line-height:1.5;max-width:320px;">
-                                    <?= esc(mb_strimwidth($line['product']['description'], 0, 120, '…')) ?>
-                                </p>
-                                <?php endif; ?>
-                            </td>
-                            <td style="font-size:0.85rem;color:var(--muted);">
-                                <?= esc(date('d M Y H:i', strtotime($line['start_at']))) ?> s/d
-                                <?= esc(date('d M Y H:i', strtotime($line['end_at']))) ?>
-                            </td>
-                            <td style="font-size:0.85rem;color:var(--muted);">
-                                <?php
-                                $fm = $line['fulfillment']['fulfillment_method'] ?? '-';
-                                echo esc($fulfillmentLabels[$fm] ?? $fm);
-
-                                if (!empty($line['fulfillment']['pickup_address'])) {
-                                    echo '<br><small>Pickup: ' . esc($line['fulfillment']['pickup_address']) . '</small>';
-                                }
-                                if (!empty($line['fulfillment']['return_address'])) {
-                                    echo '<br><small>Return: ' . esc($line['fulfillment']['return_address']) . '</small>';
-                                }
-                                ?>
-                            </td>
-                            <td>
-                                <?= esc($line['qty']) ?>
-                            </td>
-                            <td>Rp
-                                <?= number_format($line['line_total'], 0, ',', '.') ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                                    <div style="font-size:.8rem;color:var(--muted);">
+                                        Cabang:
+                                        <?= !empty($line['branch_name']) ? esc($line['branch_name']) : 'Semua cabang' ?>
+                                    </div>
+                                </td>
+                                <td style="font-size:0.85rem;color:var(--muted);">
+                                    <?php if (in_array(($line['product']['pricing_unit'] ?? ''), ['DAY', 'FULL_DAY'])): ?>
+                                    <!-- TAMPILAN 1 HARI PENUH -->
+                                    <div style="line-height: 1.5;">
+                                        <strong><?= date('d M Y', strtotime($line['start_at'])) ?></strong> <br>
+                                        <span style="font-size: 0.8rem;">(00:00 s/d 23:59)</span>
+                                    </div>
+                                    <?php else: ?>
+                                    <!-- TAMPILAN NORMAL / JAM -->
+                                    <?= esc(date('d M Y H:i', strtotime($line['start_at']))) ?> <br> s/d <br>
+                                    <?= esc(date('d M Y H:i', strtotime($line['end_at']))) ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="font-size:0.85rem;color:var(--muted);">
+                                    <?php
+                                    $fm = $line['fulfillment']['fulfillment_method'] ?? '-';
+                                    echo esc($fulfillmentLabels[$fm] ?? $fm);
+                                    ?>
+                                </td>
+                                <td><?= esc($line['qty']) ?></td>
+                                <td>Rp <?= number_format($line['line_total'], 0, ',', '.') ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <div class="cart-summary">
                 <h3 style="font-size:1.05rem;margin-bottom:16px;">Rincian Biaya</h3>
                 <div class="summary-row"><span>Subtotal Sewa</span><span>Rp
-                        <?= number_format($subtotal, 0, ',', '.') ?>
-                    </span></div>
+                        <?= number_format($subtotal, 0, ',', '.') ?></span></div>
                 <?php if ($depositTotal > 0): ?>
                 <div class="summary-row"><span>Deposit/Jaminan</span><span>Rp
-                        <?= number_format($depositTotal, 0, ',', '.') ?>
-                    </span></div>
+                        <?= number_format($depositTotal, 0, ',', '.') ?></span></div>
                 <?php endif; ?>
                 <div class="summary-row total"><span>Grand Total</span><span>Rp
-                        <?= number_format($grandTotal, 0, ',', '.') ?>
-                    </span></div>
-
-                <?php if ($depositTotal > 0): ?>
-                <p style="font-size:0.78rem;color:var(--muted);margin-top:10px;">
-                    *Deposit bersifat refundable dan akan dikembalikan sesuai syarat & ketentuan setelah barang
-                    dikembalikan dalam kondisi baik.
-                </p>
-                <?php endif; ?>
+                        <?= number_format($grandTotal, 0, ',', '.') ?></span></div>
 
                 <form method="post" action="<?= base_url('/checkout/proses') ?>" style="margin-top:18px;">
                     <?= csrf_field() ?>

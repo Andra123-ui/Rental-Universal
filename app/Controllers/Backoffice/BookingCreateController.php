@@ -7,7 +7,12 @@ use App\Libraries\BookingAvailability;
 
 /**
  * BOOK-03 — Buat Booking Manual (walk-in / telepon / admin)
- * Customer TIDAK perlu punya akun login. Akun tidak dibuat di sini.
+ *
+ * PERUBAHAN (17 Nov 2026):
+ *  - Surplus surcharge weekend/holiday dimatikan untuk booking manual
+ *  - Opsi deposit_mode = 'WITH'|'WITHOUT' dari form
+ *  - Flag anyDeposit dikirim ke view (untuk sembunyikan dropdown deposit
+ *    kalau tidak ada item yang mewajibkan deposit)
  */
 class BookingCreateController extends BaseController
 {
@@ -38,13 +43,28 @@ class BookingCreateController extends BaseController
             ->where('status', 'ACTIVE')->where('deleted_at', null)
             ->orderBy('name')->get()->getResultArray();
 
-        $resources = $this->conn->table('resources')
-            ->select('id, catalog_item_id, branch_id, resource_name, resource_code, capacity')
-            ->where('deleted_at', null)->where('status', 'AVAILABLE')
-            ->orderBy('resource_name')->get()->getResultArray();
+        // Flag: apakah ada item yang mewajibkan deposit?
+        $anyDeposit = false;
+        foreach ($items as $it) {
+            if (!empty($it['deposit_required'])) {
+                $anyDeposit = true;
+                break;
+            }
+        }
 
-        $branches = $this->conn->table('branches')->select('id, branch_name')
-            ->where('is_active', 1)->orderBy('branch_name')->get()->getResultArray();
+        $resQ = $this->conn->table('resources')
+            ->select('id, catalog_item_id, branch_id, resource_name, resource_code, capacity')
+            ->where('deleted_at', null)->where('status', 'AVAILABLE');
+        if ($this->branchId) {
+            $resQ->where('branch_id', $this->branchId);
+        }
+        $resources = $resQ->orderBy('resource_name')->get()->getResultArray();
+
+        $brQ = $this->conn->table('branches')->select('id, branch_name')->where('is_active', 1);
+        if ($this->branchId) {
+            $brQ->where('id', $this->branchId);
+        }
+        $branches = $brQ->orderBy('branch_name')->get()->getResultArray();
 
         $prefill = session()->getFlashdata('prefill');
 
@@ -60,6 +80,7 @@ class BookingCreateController extends BaseController
             'fees'        => $this->fees(),
             'canOverride' => admin_can('booking.override_price'),
             'prefill'     => is_string($prefill) ? $prefill : 'null',
+            'anyDeposit'  => $anyDeposit,
         ]);
     }
 
@@ -97,12 +118,14 @@ class BookingCreateController extends BaseController
     {
         $this->boot();
 
-        $data   = $this->request->getGet();
-        $branch = $this->resolveBranch($data['branch_id'] ?? null);
-        $rows   = [];
-        $pend   = [];
-        $tot    = ['subtotal' => 0.0, 'discount' => 0.0, 'deposit' => 0.0];
-        $allOk  = $branch !== null;
+        $data    = $this->request->getGet();
+        $branch  = $this->resolveBranch($data['branch_id'] ?? null);
+        $withDep = $this->wantsDeposit($data);
+
+        $rows  = [];
+        $pend  = [];
+        $tot   = ['subtotal' => 0.0, 'discount' => 0.0, 'deposit' => 0.0];
+        $allOk = $branch !== null;
 
         $rawItems = is_array($data['items'] ?? null) ? array_values($data['items']) : [];
 
@@ -111,7 +134,7 @@ class BookingCreateController extends BaseController
         }
 
         foreach (array_slice($rawItems, 0, self::MAX_ITEMS) as $in) {
-            $res = $this->evaluateRow((array) $in, $branch, false, $pend);
+            $res = $this->evaluateRow((array) $in, $branch, false, $pend, $withDep);
             if (!$res['ok']) {
                 $allOk = false;
             } else {
@@ -163,7 +186,7 @@ class BookingCreateController extends BaseController
             return $this->failBack($post, 'Terjadi kesalahan saat menyimpan booking. Coba lagi.');
         }
 
-            $redirect = redirect()->to(site_url('backoffice/bookings/' . id_encode($result['id'])) . '?tab=payments')
+        $redirect = redirect()->to(site_url('backoffice/bookings/' . id_encode($result['id'])) . '?tab=payments')
             ->with('success', "Booking {$result['invoice']} dibuat ({$action}). Silakan catat pembayaran jika customer sudah membayar.");
 
         if ($result['invite']) {
@@ -179,8 +202,8 @@ class BookingCreateController extends BaseController
 
     private function save(array $post, string $action): array
     {
-        // ---------- validasi non-DB ----------
-        $branch = $this->resolveBranch($post['branch_id'] ?? null);
+        $branch  = $this->resolveBranch($post['branch_id'] ?? null);
+        $withDep = $this->wantsDeposit($post);
         if ($branch === null) {
             throw new \DomainException('Pilih cabang.');
         }
@@ -194,9 +217,16 @@ class BookingCreateController extends BaseController
         if (!isset(self::FULFILLMENT[$method])) {
             throw new \DomainException('Metode pengambilan tidak valid.');
         }
+
+        if ($source === 'WALKIN') {
+            $method = 'SELF_PICKUP';
+        }
+
         $addrIn  = trim((string) ($post['pickup_address'] ?? ''));
         $addrOut = trim((string) ($post['return_address'] ?? ''));
-        if (in_array($method, ['DELIVERY', 'ONSITE'], true) && $addrIn === '') {
+        if ($source === 'WALKIN') {
+            $addrIn = $addrOut = '';
+        } elseif (in_array($method, ['DELIVERY', 'ONSITE'], true) && $addrIn === '') {
             throw new \DomainException('Alamat wajib diisi untuk metode ' . self::FULFILLMENT[$method] . '.');
         }
         if ($addrOut === '' && $addrIn !== '') {
@@ -248,10 +278,8 @@ class BookingCreateController extends BaseController
         $adminId = (int) session()->get('admin_id');
         $now     = date('Y-m-d H:i:s');
 
-        // ---------- transaksi ----------
         $this->conn->transBegin();
         try {
-            // Customer
             if ($customerMode === 'new') {
                 $dup = $this->conn->table('customers')->select('name')->where('phone', $newPhone)->get()->getRowArray();
                 if ($dup) {
@@ -274,7 +302,6 @@ class BookingCreateController extends BaseController
             }
             $account = $this->conn->table('customer_accounts')->where('customer_id', $customerId)->get()->getRowArray();
 
-            // Header booking (total diisi setelah semua item)
             $expiryMin = (int) $this->setting('booking.expiry_minutes', 1440);
             $status    = $action;
             $expires   = $status === 'PENDING' ? date('Y-m-d H:i:s', time() + max(1, $expiryMin) * 60) : null;
@@ -286,6 +313,9 @@ class BookingCreateController extends BaseController
             }
             if ($hasOverride) {
                 $internal .= "\nHarga diubah manual: " . mb_substr($priceReason, 0, 240);
+            }
+            if (!$withDep) {
+                $internal .= "\nTanpa deposit (dipilih admin)";
             }
 
             $invoice = $this->newInvoiceNo();
@@ -319,13 +349,12 @@ class BookingCreateController extends BaseController
             ]);
             $bookingId = (int) $this->conn->insertID();
 
-            // Item + alokasi (alokasi baris sebelumnya langsung terlihat oleh baris berikutnya)
             $sub = $disc = $dep = 0.0;
             $minStart = $maxEnd = null;
             $errors = [];
 
             foreach ($rawItems as $idx => $in) {
-                $res = $this->evaluateRow((array) $in, $branch, true, []);
+                $res = $this->evaluateRow((array) $in, $branch, true, [], $withDep);
                 if (!$res['ok']) {
                     $errors[] = 'Item ' . ($idx + 1) . ': ' . $res['message'];
                     continue;
@@ -386,7 +415,6 @@ class BookingCreateController extends BaseController
                 throw new \DomainException(implode(' | ', $errors));
             }
 
-            // Biaya antar / di lokasi
             $fee = $this->fulfillmentFee($method);
             if ($fee > 0) {
                 $this->conn->table('booking_charges')->insert([
@@ -402,7 +430,6 @@ class BookingCreateController extends BaseController
                 ]);
             }
 
-            // grand = subtotal - diskon + biaya + deposit (sama dengan recalcMoney di halaman detail)
             $grand = round($sub - $disc + $fee + $dep, 2);
             $this->conn->table('bookings')->where('id', $bookingId)->update([
                 'start_at'       => $minStart,
@@ -441,7 +468,6 @@ class BookingCreateController extends BaseController
             throw $e;
         }
 
-        // Info login (hanya dibuatkan teks; tidak ada akun yang dibuat dan tidak ada pesan terkirim otomatis)
         $invite = null;
         $wantInvite = !empty($post['invite']);
         $hasActive  = $account && $account['status'] === 'ACTIVE';
@@ -464,7 +490,7 @@ class BookingCreateController extends BaseController
     // Evaluasi satu baris item (dipakai check dan save)
     // ===================================================================
 
-    private function evaluateRow(array $in, int $branch, bool $lock, array $pending): array
+    private function evaluateRow(array $in, int $branch, bool $lock, array $pending, bool $withDeposit = true): array
     {
         $fail = static fn (string $m) => ['ok' => false, 'message' => $m, 'catalog' => null, 'quote' => null,
             'alloc' => ['allocations' => [], 'reasons' => []], 'warnings' => [], 'start' => null, 'end' => null,
@@ -479,6 +505,14 @@ class BookingCreateController extends BaseController
 
         $start = BookingAvailability::parseMoment($in['start'] ?? null);
         $end   = BookingAvailability::parseMoment($in['end'] ?? null);
+
+        if ($c && in_array($c['pricing_unit'] ?? '', ['DAY', 'FULL_DAY', 'NIGHT'])) {
+            if ($start) {
+                $start = date('Y-m-d 00:00:00', strtotime($start));
+                $end   = date('Y-m-d 23:59:59', strtotime($start));
+            }
+        }
+
         if (!$start || !$end) {
             return $fail($c['name'] . ': tanggal/waktu mulai dan selesai wajib diisi.');
         }
@@ -503,13 +537,25 @@ class BookingCreateController extends BaseController
             $override = (float) $in['price_override'];
         }
 
+        $resId = (int) ($in['resource_id'] ?? 0);
+        if ($resId) {
+            $okRes = $this->conn->table('resources')->where('id', $resId)
+                ->where('branch_id', $branch)->where('deleted_at', null)->countAllResults();
+            if (!$okRes) {
+                return $fail($c['name'] . ': unit yang dipilih bukan milik cabang ini.');
+            }
+        }
+
         try {
-            $quote = $this->avail->quote($c, $start, $end, $qty, $branch, $override);
+            $quote = $this->avail->quote(
+                $c, $start, $end, $qty, $branch, $override,
+                false,
+                $withDeposit
+            );
         } catch (\DomainException $e) {
             return $fail($c['name'] . ': ' . $e->getMessage());
         }
 
-        $resId = (int) ($in['resource_id'] ?? 0);
         $alloc = $this->avail->allocate($c, $start, $end, $qty, $branch, $resId ?: null, $lock, null, $pending);
 
         $bb = (int) $c['buffer_before_minutes'];
@@ -560,8 +606,6 @@ class BookingCreateController extends BaseController
 
     private function boot(): void
     {
-        // Jika id_encode/id_decode dimuat lewat helper lain, tambahkan helper itu di sini
-        // (samakan dengan BookingController::boot()).
         helper('backoffice');
 
         if (!function_exists('id_encode')) {
@@ -573,7 +617,6 @@ class BookingCreateController extends BaseController
         $this->branchId = session()->get('admin_branch_id') ? (int) session()->get('admin_branch_id') : null;
     }
 
-    /** Cabang yang dipakai: user terikat cabang -> paksa cabangnya; selain itu harus dipilih dan valid. */
     private function resolveBranch($posted): ?int
     {
         if ($this->branchId) {
@@ -587,10 +630,14 @@ class BookingCreateController extends BaseController
         return $ok ? $id : null;
     }
 
+    private function wantsDeposit(array $src): bool
+    {
+        $v = strtoupper((string) ($src['deposit_mode'] ?? 'WITH'));
+        return $v !== 'WITHOUT';
+    }
+
     private function failBack(array $post, string $message)
     {
-        unset($post['csrf_test_name']);
-        // buang token csrf apa pun namanya
         foreach (array_keys($post) as $k) {
             if (stripos((string) $k, 'csrf') !== false) {
                 unset($post[$k]);
@@ -635,7 +682,6 @@ class BookingCreateController extends BaseController
         throw new \RuntimeException('Gagal membuat nomor invoice unik.');
     }
 
-    /** 0812…, 62812…, +62812…, 812… -> +62812… ; null jika tidak masuk akal. */
     public static function normalizePhone(string $raw): ?string
     {
         $d = preg_replace('/\D+/', '', $raw);

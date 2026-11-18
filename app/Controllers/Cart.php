@@ -9,6 +9,26 @@ class Cart extends BaseController
 {
     protected const SESSION_KEY = 'rental_cart';
 
+    /**
+     * FUNGSI BARU: Sama seperti di Checkout, untuk memotong waktu.
+     */
+         private function normalizeDates(array $product, string $startAt, string $endAt): array
+    {
+        $pricingUnit = $product['pricing_unit'] ?? 'DAY';
+        
+        // Jika pakai DAY (Hari) atau FULL_DAY, paksa jadi 00:00 - 23:59
+        if (in_array($pricingUnit, ['DAY', 'FULL_DAY'])) {
+            $startDate = date('Y-m-d', strtotime($startAt));
+            
+            $newStart = $startDate . ' 00:00:00';
+            $newEnd   = $startDate . ' 23:59:59';
+            
+            return [$newStart, $newEnd];
+        }
+        
+        return [$startAt, $endAt];
+    }
+
     public function index()
     {
         session()->remove('buy_now_cart');
@@ -24,11 +44,14 @@ class Cart extends BaseController
                 continue;
             }
 
+            // Normalisasi untuk tampilan & perhitungan harga
+            [$startAt, $endAt] = $this->normalizeDates($product, $line['start_at'], $line['end_at']);
+
             $priceEstimate = $availabilityModel->estimatePrice(
                 $product,
                 $line['branch_id'] ?? null,
-                $line['start_at'],
-                $line['end_at'],
+                $startAt,
+                $endAt,
                 (int) $line['qty']
             );
 
@@ -42,8 +65,8 @@ class Cart extends BaseController
                 'branch_id' => $line['branch_id'] ?? null,
                 'branch_name' => $line['branch_name'] ?? null,
                 'branch_address' => $line['branch_address'] ?? null,
-                'start_at' => $line['start_at'],
-                'end_at' => $line['end_at'],
+                'start_at' => $startAt, // Gunakan yang sudah dinormalisasi
+                'end_at' => $endAt,     // Gunakan yang sudah dinormalisasi
                 'line_total' => $lineTotal,
                 'price_detail' => $priceEstimate,
             ];
@@ -79,7 +102,9 @@ class Cart extends BaseController
             return redirect()->back()->with('error', 'Silakan pilih cabang terlebih dahulu.');
         }
 
-        // Ambil data cabang dari database
+        // NORMALISASI WAKTU DI SINI
+        [$startAt, $endAt] = $this->normalizeDates($product, $startAt, $endAt);
+
         $branch = db_connect()->table('branches')
             ->select('branch_name, address, phone')
             ->where('id', $branchId)
@@ -110,7 +135,6 @@ class Cart extends BaseController
             );
         }
 
-        // Simpan data cabang ke session
         $cart[$key] = [
             'catalog_item_id' => $catalogItemId,
             'branch_id' => $branchId,
@@ -194,11 +218,13 @@ class Cart extends BaseController
                     continue;
                 }
 
+                [$startAt, $endAt] = $this->normalizeDates($product, $l['start_at'], $l['end_at']);
+
                 $priceEstimate = $availabilityModel->estimatePrice(
                     $product,
                     $l['branch_id'] ?? null,
-                    $l['start_at'],
-                    $l['end_at'],
+                    $startAt,
+                    $endAt,
                     (int) $l['qty']
                 );
 

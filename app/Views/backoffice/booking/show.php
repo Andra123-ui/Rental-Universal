@@ -87,11 +87,6 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     dikembalikan. Catat refund di tab Pembayaran.</div>
 <?php endif; ?>
 
-<?php if ($bk['status'] === 'CANCELLED' && (float) $bk['paid_total'] > 0): ?>
-<div class="alert alert-error">Booking dibatalkan tetapi pembayaran <?= esc($rp($bk['paid_total'])) ?> belum
-    dikembalikan. Catat refund di tab Pembayaran.</div>
-<?php endif; ?>
-
 <?php if (!$closedStatus && (float) $bk['balance_due'] > 0 && $can['pay'] && (float) $bk['paid_total'] <= 0): ?>
 <div class="alert alert-warning"
     style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -204,7 +199,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                 class="tab-n"><?= count($payments) ?></span></button>
         <button type="button" class="tab" data-tab="charges">Biaya <span
                 class="tab-n"><?= count($charges) ?></span></button>
-        <button type="button" class="tab" data-tab="deposit">Deposit</button>
+        <button type="button" class="tab" data-tab="deposit">Deposit <span
+                class="tab-n"><?= count($depositPayments) ?></span></button>
         <button type="button" class="tab" data-tab="assignment">Penugasan <span
                 class="tab-n"><?= count($assignments) ?></span></button>
         <button type="button" class="tab" data-tab="handover">Handover <span
@@ -279,8 +275,7 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     <section data-pane="payments">
         <?php if ($legacyPaid): ?>
         <div class="alert alert-success">Pembayaran <?= esc($rp($bk['paid_total'])) ?> tercatat di booking, tetapi
-            belum
-            punya riwayat transaksi. Riwayatnya dibuat otomatis saat pembayaran atau biaya pertama dicatat.</div>
+            belum punya riwayat transaksi. Riwayatnya dibuat otomatis saat pembayaran atau biaya pertama dicatat.</div>
         <?php endif; ?>
 
         <div class="action-row">
@@ -337,6 +332,13 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
                         <label>Nominal (maks <?= esc($rp($bk['paid_total'])) ?>)</label>
                         <input type="number" name="amount" min="1" max="<?= (int) $bk['paid_total'] ?>" step="1"
                             required>
+                    </div>
+                    <div>
+                        <label>Jenis refund</label>
+                        <select name="payment_type">
+                            <option value="REFUND">Refund umum</option>
+                            <option value="DEPOSIT">Pengembalian deposit</option>
+                        </select>
                     </div>
                     <div>
                         <label>Metode</label>
@@ -531,29 +533,101 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
 
     <!-- ---------- Deposit ---------- -->
     <section data-pane="deposit">
-        <?php if ($deposit): ?>
-        <dl class="dl dl-money" style="max-width:420px;">
-            <dt>Status</dt>
-            <dd><span class="badge <?= esc($badge($deposit['status']), 'attr') ?>"><?= esc($deposit['status']) ?></span>
-            </dd>
+        <?php
+        $ds = $depSummary ?? ['required'=>0,'held'=>0,'withheld'=>0,'refunded'=>0,'pending'=>0,'status'=>'NONE'];
+        $depStatusLabel = [
+            'NONE'     => ['badge-off',  'Tidak ada deposit'],
+            'PENDING'  => ['badge-warn', 'Menunggu pembayaran deposit'],
+            'HELD'     => ['badge-warn', 'Deposit diterima, belum dikembalikan'],
+            'PARTIAL'  => ['badge-info', 'Dikembalikan sebagian'],
+            'REFUNDED' => ['badge-ok',   'Deposit sudah dikembalikan penuh'],
+        ][$ds['status']] ?? ['badge-off', $ds['status']];
+        ?>
+        <dl class="dl dl-money" style="max-width:480px;">
+            <dt>Status deposit</dt>
+            <dd><span class="badge <?= esc($depStatusLabel[0], 'attr') ?>"><?= esc($depStatusLabel[1]) ?></span></dd>
             <dt>Diwajibkan</dt>
-            <dd><?= esc($rp($deposit['amount_required'])) ?></dd>
+            <dd><?= esc($rp($ds['required'])) ?></dd>
             <dt>Diterima</dt>
-            <dd><?= esc($rp($deposit['amount_received'])) ?></dd>
-            <dt>Dipotong</dt>
-            <dd><?= esc($rp($deposit['amount_deducted'])) ?></dd>
-            <dt>Dikembalikan</dt>
-            <dd><?= esc($rp($deposit['amount_refunded'])) ?></dd>
-            <?php if ($deposit['notes']): ?><dt>Catatan</dt>
-            <dd><?= esc($deposit['notes']) ?></dd><?php endif; ?>
+            <dd><?= esc($rp($ds['held'])) ?></dd>
+            <?php if ($ds['withheld'] > 0): ?>
+            <dt>Dipotong (kerusakan/denda)</dt>
+            <dd class="text-danger">- <?= esc($rp($ds['withheld'])) ?></dd>
+            <?php endif; ?>
+            <dt>Sudah dikembalikan</dt>
+            <dd><?= esc($rp($ds['refunded'])) ?></dd>
+            <dt class="strong">Belum dikembalikan</dt>
+            <dd class="strong <?= $ds['pending'] > 0 ? 'text-danger' : '' ?>">
+                <?= esc($rp($ds['pending'])) ?>
+            </dd>
         </dl>
-        <?php elseif ((float) $bk['deposit_total'] > 0): ?>
-        <p>Deposit <strong><?= esc($rp($bk['deposit_total'])) ?></strong> termasuk di grand total booking ini.</p>
-        <p class="muted">Belum ada catatan deposit terpisah (penerimaan, potongan, dan pengembalian belum diproses
-            di
-            halaman ini).</p>
+
+        <?php if ($ds['status'] === 'HELD' || $ds['status'] === 'PARTIAL'): ?>
+        <div class="alert alert-warning" style="margin-top:10px;">
+            Deposit <strong><?= esc($rp($ds['pending'])) ?></strong> belum dikembalikan ke customer.
+            Catat pengembalian lewat tombol <em>Catat refund</em> di tab <strong>Pembayaran</strong> dengan
+            jenis <em>Pengembalian deposit</em>.
+        </div>
+        <?php elseif ($ds['status'] === 'PENDING'): ?>
+        <div class="alert alert-warning" style="margin-top:10px;">
+            Deposit belum dibayar. Catat penerimaan deposit lewat tab <strong>Pembayaran</strong> dengan
+            jenis pembayaran <em>Deposit</em>.
+        </div>
+        <?php elseif ($ds['status'] === 'REFUNDED'): ?>
+        <div class="alert alert-success" style="margin-top:10px;">
+            Deposit sudah dikembalikan penuh.
+        </div>
+        <?php endif; ?>
+
+        <h3 class="sub-title" style="margin-top:18px;">Riwayat transaksi deposit</h3>
+        <?php if (empty($depositPayments)): ?>
+        <p class="muted">Belum ada transaksi deposit yang tercatat.</p>
         <?php else: ?>
-        <p class="muted">Booking ini tidak mewajibkan deposit.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Waktu</th>
+                        <th>Arah</th>
+                        <th>Metode</th>
+                        <th>Nominal</th>
+                        <th>Status</th>
+                        <th>Petugas</th>
+                        <th>Catatan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($depositPayments as $dp): ?>
+                    <tr>
+                        <td><?= esc($dp['payment_no']) ?>
+                            <?php if (!empty($dp['reference_no'])): ?>
+                            <div class="muted">Ref: <?= esc($dp['reference_no']) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= esc($dt($dp['paid_at'] ?: $dp['created_at'])) ?></td>
+                        <td>
+                            <?php if (strtoupper((string) $dp['direction']) === 'OUT'): ?>
+                            <span class="badge badge-danger">Pengembalian</span>
+                            <?php else: ?>
+                            <span class="badge badge-ok">Penerimaan</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= esc($payMethods[$dp['method']] ?? $dp['method']) ?></td>
+                        <td class="<?= strtoupper((string) $dp['direction']) === 'OUT' ? 'text-danger' : '' ?>">
+                            <?= strtoupper((string) $dp['direction']) === 'OUT' ? '- ' : '' ?>
+                            <?= esc($rp($dp['amount'])) ?>
+                        </td>
+                        <td><span
+                                class="badge <?= esc($badge($dp['status']), 'attr') ?>"><?= esc($dp['status']) ?></span>
+                        </td>
+                        <td><?= esc($dp['received_by'] ?? '-') ?></td>
+                        <td><?= esc((string) ($dp['notes'] ?? '')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
         <?php endif; ?>
     </section>
 

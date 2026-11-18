@@ -279,13 +279,15 @@ class BookingController extends BaseController
         return $b;
     }
 
-    /** Daftar pilihan filter: nilai bawaan + nilai yang benar-benar ada di DB. */
+    /** Daftar pilihan filter: nilai bawaan + nilai yang ada di DB (dibatasi cabang admin). */
     private function options(string $column, array $defaults): array
     {
-        $db = array_column(
-            $this->conn->table('bookings')->select($column)->distinct()->get()->getResultArray(),
-            $column
-        );
+        $q = $this->conn->table('bookings')->select($column)->distinct();
+        if ($this->branchId) {
+            $q->where('branch_id', $this->branchId);
+        }
+        $db = array_column($q->get()->getResultArray(), $column);
+
         $all = array_values(array_unique(array_merge($defaults, array_filter($db))));
         sort($all);
         return $all;
@@ -297,8 +299,6 @@ class BookingController extends BaseController
 
     private function boot(): void
     {
-        // Jika id_encode/id_decode dimuat lewat helper lain, tambahkan helper itu di sini
-        // (samakan dengan yang dipakai ProdukController).
         helper('backoffice');
 
         if (!function_exists('id_encode') || !function_exists('id_decode')) {
@@ -318,7 +318,7 @@ class BookingController extends BaseController
 
         $q = $this->conn->table('bookings')->where('id', (int) $id);
         if ($this->branchId) {
-            $q->where('branch_id', $this->branchId); // staff cabang hanya boleh booking cabangnya
+            $q->where('branch_id', $this->branchId); // admin cabang hanya boleh booking cabangnya
         }
 
         return $q->get()->getRowArray() ?: null;
@@ -373,9 +373,8 @@ class BookingController extends BaseController
         return $v;
     }
 
-        private function has(string $uri): bool
+    private function has(string $uri): bool
     {
-        // CodeIgniter menyimpan placeholder sebagai regex: (:segment) -> ([^/]+)
         $uri = str_replace('(:segment)', '([^/]+)', $uri);
 
         if (!$this->routeKeys) {

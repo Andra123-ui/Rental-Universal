@@ -2,6 +2,40 @@
 
 <?= $this->section('content') ?>
 
+<style>
+/* Memaksa tabel kembali ke bentuk tabel normal */
+.table-responsive {
+    overflow-x: visible !important;
+    /* Biarkan terlihat, jangan di-hide */
+}
+
+.table-custom {
+    display: table !important;
+    width: 100% !important;
+    table-layout: auto !important;
+    white-space: normal !important;
+}
+
+.table-custom thead {
+    display: table-header-group !important;
+}
+
+.table-custom tbody {
+    display: table-row-group !important;
+}
+
+.table-custom tr {
+    display: table-row !important;
+}
+
+.table-custom th,
+.table-custom td {
+    display: table-cell !important;
+    vertical-align: middle !important;
+    padding: 12px !important;
+}
+</style>
+
 <!-- 1. STATUS TABS -->
 <div class="card-custom mb-4 p-2 bg-white">
     <div class="nav nav-pills flex-nowrap overflow-x-auto text-nowrap gap-1" id="status-tabs" role="tablist">
@@ -93,7 +127,8 @@
 
 <!-- 3. BOOKINGS LIST TABLE / CARDS -->
 <div class="card-custom">
-    <div class="table-responsive">
+    <!-- Gunakan overflow-x: hidden atau visible -->
+    <div class="table-responsive" style="overflow-x: hidden;">
         <?php if (!empty($bookings)): ?>
         <table class="table table-custom align-middle">
             <thead>
@@ -221,7 +256,7 @@
             Menampilkan halaman <?= $pager->getCurrentPage('bookings') ?> dari <?= $pager->getPageCount('bookings') ?>
         </span>
         <div>
-            <?= $pager->links('bookings', 'default_bootstrap') ?>
+            <?= $pager->links('bookings', 'default_full') ?>
         </div>
     </div>
     <?php endif; ?>

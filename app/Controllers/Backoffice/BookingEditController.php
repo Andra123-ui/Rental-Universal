@@ -579,6 +579,14 @@ class BookingEditController extends BaseController
 
         $resId = (int) ($in['resource_id'] ?? 0);
 
+                if ($resId) {
+            $okRes = $this->conn->table('resources')->where('id', $resId)
+                ->where('branch_id', $branch)->where('deleted_at', null)->countAllResults();
+            if (!$okRes) {
+                return $fail($c['name'] . ': unit yang dipilih bukan milik cabang booking ini.');
+            }
+        }
+
         // klasifikasi
         $action = 'ADD';
         if ($old) {

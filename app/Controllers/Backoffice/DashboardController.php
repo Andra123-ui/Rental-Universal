@@ -237,14 +237,23 @@ class DashboardController extends BaseController
 
         // ---------------- Customer auth attention ----------------
         if ($canVerify) {
-            $data['custAttention']['docs'] = $this->conn->table('customer_documents')
-                ->where('verification_status', 'PENDING')->countAllResults();
+            $bid = (int) $this->branchId;
 
-            $data['custAttention']['locked'] = $this->conn->table('customer_accounts')
+            $dq = $this->conn->table('customer_documents')->where('verification_status', 'PENDING');
+            if ($bid) {
+                $dq->where("EXISTS (SELECT 1 FROM bookings bx WHERE bx.customer_id = customer_documents.customer_id AND bx.branch_id = {$bid})", null, false);
+            }
+            $data['custAttention']['docs'] = $dq->countAllResults();
+
+            $lq = $this->conn->table('customer_accounts')
                 ->groupStart()
                     ->whereIn('status', ['SUSPENDED', 'BLOCKED', 'LOCKED'])
                     ->orGroupStart()->where('locked_until >', $now)->groupEnd()
-                ->groupEnd()->countAllResults();
+                ->groupEnd();
+            if ($bid) {
+                $lq->where("EXISTS (SELECT 1 FROM bookings bx WHERE bx.customer_id = customer_accounts.customer_id AND bx.branch_id = {$bid})", null, false);
+            }
+            $data['custAttention']['locked'] = $lq->countAllResults();
         }
 
         // ---------------- Aktivitas terbaru ----------------
@@ -260,11 +269,13 @@ class DashboardController extends BaseController
         }
 
         if ($canStaff) {
-            $data['recentLogs'] = $this->conn->table('activity_logs a')
+            $lgq = $this->conn->table('activity_logs a')
                 ->select('a.event_type, a.description, a.created_at, u.name AS user_name')
-                ->join('users u', 'u.id = a.user_id', 'left')
-                ->orderBy('a.id', 'DESC')->limit(8)
-                ->get()->getResultArray();
+                ->join('users u', 'u.id = a.user_id', 'left');
+            if ($this->branchId) {
+                $lgq->where('u.branch_id', $this->branchId); // admin cabang: hanya aktivitas staf cabangnya
+            }
+            $data['recentLogs'] = $lgq->orderBy('a.id', 'DESC')->limit(8)->get()->getResultArray();
         }
 
         // ---------------- Quick actions (hanya jika route-nya sudah ada) ----------------
@@ -327,9 +338,8 @@ class DashboardController extends BaseController
         return $s . ' – ' . $e;
     }
 
-        private function has(string $uri): bool
+    private function has(string $uri): bool
     {
-        // CodeIgniter menyimpan placeholder sebagai regex: (:segment) -> ([^/]+)
         $uri = str_replace('(:segment)', '([^/]+)', $uri);
 
         if (!$this->routeKeys) {

@@ -78,6 +78,7 @@ $hasFilter = $clean !== [];
                     <th>Kategori / Jenis</th>
                     <th>Tipe / Mode</th>
                     <th>Harga</th>
+                    <th>Deposit</th>
                     <th>Online</th>
                     <th>Unit & Cabang</th>
                     <th>Status</th>
@@ -87,7 +88,7 @@ $hasFilter = $clean !== [];
             <tbody>
                 <?php if (empty($rows)): ?>
                 <tr>
-                    <td colspan="9" class="muted">Tidak ada produk.</td>
+                    <td colspan="10" class="muted">Tidak ada produk.</td>
                 </tr>
                 <?php endif; ?>
                 <?php foreach ($rows as $r): $h = id_encode($r['id']); ?>
@@ -112,6 +113,16 @@ $hasFilter = $clean !== [];
                     <td>
                         Rp <?= number_format($r['base_price'], 0, ',', '.') ?>
                         <span class="muted">/ <?= esc($r['unit_label']) ?></span>
+                    </td>
+                    <td>
+                        <?php if ((int) $r['deposit_required'] === 1): ?>
+                        Rp <?= number_format((float) $r['deposit_amount'], 0, ',', '.') ?>
+                        <div class="muted" style="font-size:.75rem;">
+                            <?= ((float) $r['deposit_amount'] === (float) $defaultDeposit) ? 'Default' : 'Manual' ?>
+                        </div>
+                        <?php else: ?>
+                        <span class="muted">-</span>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <span class="badge <?= (int) $r['allow_online_booking'] ? 'badge-ok' : 'badge-off' ?>">

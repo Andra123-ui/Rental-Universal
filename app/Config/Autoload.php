@@ -92,5 +92,6 @@ class Autoload extends AutoloadConfig
     'site',
     'idhash',
     'customer',
+    'branch',
 ];
 }

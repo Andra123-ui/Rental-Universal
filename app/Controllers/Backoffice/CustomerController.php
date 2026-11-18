@@ -7,6 +7,7 @@ use App\Controllers\BaseController;
 /**
  * CUST-01 Daftar Customer, CUST-02 Detail Customer.
  * Customer dengan booking TIDAK pernah di-hard-delete (tidak ada aksi hapus di sini).
+ * Admin cabang hanya melihat customer yang pernah booking di cabangnya.
  */
 class CustomerController extends BaseController
 {
@@ -18,6 +19,7 @@ class CustomerController extends BaseController
     private const DOC_MAX_KB = 5120;
 
     private $conn;
+    private ?int $branchId = null;
     private array $cf = []; // kolom customers
     private array $af = []; // kolom customer_accounts
     private array $df = []; // kolom customer_documents
@@ -121,21 +123,26 @@ class CustomerController extends BaseController
             }
         }
 
-        // Riwayat booking
+        // Riwayat booking (admin cabang: hanya booking cabangnya)
         $limit = $this->request->getGet('all') ? 500 : 25;
-        $bookings = $this->conn->table('bookings')
+        $bq = $this->conn->table('bookings')
             ->select('id, invoice_no, created_at, start_at, end_at, status, payment_status, grand_total')
-            ->where('customer_id', $id)->orderBy('id', 'DESC')->limit($limit)->get()->getResultArray();
+            ->where('customer_id', $id);
+        if ($this->branchId) {
+            $bq->where('branch_id', $this->branchId);
+        }
+        $bookings = $bq->orderBy('id', 'DESC')->limit($limit)->get()->getResultArray();
         foreach ($bookings as &$b) {
             $b['url'] = site_url('backoffice/bookings/' . id_encode((int) $b['id']));
         }
         unset($b);
 
+        $sb = $this->branchId ? ' AND branch_id = ' . (int) $this->branchId : '';
         $stat = $this->conn->query(
             "SELECT COUNT(*) AS n,
                     COALESCE(SUM(CASE WHEN status NOT IN ('CANCELLED','EXPIRED') THEN grand_total END), 0) AS total,
                     MAX(created_at) AS last_at
-               FROM bookings WHERE customer_id = ?",
+               FROM bookings WHERE customer_id = ?" . $sb,
             [$id]
         )->getRowArray();
 
@@ -145,6 +152,9 @@ class CustomerController extends BaseController
             $dq = $this->conn->table('customers')->select('id, name')->where('phone', $c['phone'])->where('id !=', $id);
             if (in_array('deleted_at', $this->cf, true)) {
                 $dq->where('deleted_at', null);
+            }
+            if ($this->branchId) {
+                $dq->where($this->inBranch('customers'), null, false);
             }
             $dups = $dq->limit(5)->get()->getResultArray();
         }
@@ -412,8 +422,11 @@ class CustomerController extends BaseController
         $login = $this->firstExisting(['last_login_at', 'last_login'], $this->af);
         $s .= $login ? ", ca.{$login} AS acc_last_login" : ', NULL AS acc_last_login';
 
-        $s .= ', (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id) AS booking_count';
-        $s .= ', (SELECT MAX(b2.created_at) FROM bookings b2 WHERE b2.customer_id = c.id) AS last_booking_at';
+        // Admin cabang: hitung booking di cabangnya saja
+        $bw  = $this->branchId ? ' AND b.branch_id = '  . (int) $this->branchId : '';
+        $bw2 = $this->branchId ? ' AND b2.branch_id = ' . (int) $this->branchId : '';
+        $s .= ', (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id' . $bw . ') AS booking_count';
+        $s .= ', (SELECT MAX(b2.created_at) FROM bookings b2 WHERE b2.customer_id = c.id' . $bw2 . ') AS last_booking_at';
         $s .= ", (SELECT COUNT(*) FROM customers d WHERE d.phone = c.phone AND d.phone <> '' AND d.id <> c.id{$del}) AS dup_count";
 
         return $s;
@@ -424,6 +437,11 @@ class CustomerController extends BaseController
         $del = in_array('deleted_at', $this->cf, true);
         if ($del) {
             $qb->where('c.deleted_at', null);
+        }
+
+        // Admin cabang: hanya customer yang pernah booking di cabangnya
+        if ($this->branchId) {
+            $qb->where($this->inBranch('c'), null, false);
         }
 
         if ($f['q'] !== '') {
@@ -491,10 +509,17 @@ class CustomerController extends BaseController
     {
         helper('backoffice'); // id_encode / id_decode / admin_can
 
-        $this->conn = db_connect();
-        $this->cf   = $this->conn->getFieldNames('customers');
-        $this->af   = $this->conn->tableExists('customer_accounts') ? $this->conn->getFieldNames('customer_accounts') : [];
-        $this->df   = $this->conn->tableExists('customer_documents') ? $this->conn->getFieldNames('customer_documents') : [];
+        $this->conn     = db_connect();
+        $this->branchId = session()->get('admin_branch_id') ? (int) session()->get('admin_branch_id') : null;
+        $this->cf       = $this->conn->getFieldNames('customers');
+        $this->af       = $this->conn->tableExists('customer_accounts') ? $this->conn->getFieldNames('customer_accounts') : [];
+        $this->df       = $this->conn->tableExists('customer_documents') ? $this->conn->getFieldNames('customer_documents') : [];
+    }
+
+    /** Potongan SQL: customer pernah booking di cabang admin. */
+    private function inBranch(string $alias): string
+    {
+        return "EXISTS (SELECT 1 FROM bookings bx WHERE bx.customer_id = {$alias}.id AND bx.branch_id = " . (int) $this->branchId . ')';
     }
 
     private function canSeePhone(): bool
@@ -512,9 +537,10 @@ class CustomerController extends BaseController
         return admin_can('booking.create') || admin_can('booking.manage');
     }
 
+    /** Resolution (merge/link) lintas cabang: hanya admin lintas cabang (Owner). */
     private function canResolve(): bool
     {
-        return admin_can('customer.resolve') || admin_can('customer.manage');
+        return $this->branchId === null && (admin_can('customer.resolve') || admin_can('customer.manage'));
     }
 
     private function uid(): int
@@ -575,9 +601,12 @@ class CustomerController extends BaseController
         if (!$id) {
             return null;
         }
-        $q = $this->conn->table('customers')->where('id', (int) $id);
+        $q = $this->conn->table('customers c')->select('c.*')->where('c.id', (int) $id);
         if (in_array('deleted_at', $this->cf, true)) {
-            $q->where('deleted_at', null);
+            $q->where('c.deleted_at', null);
+        }
+        if ($this->branchId) {
+            $q->where($this->inBranch('c'), null, false);
         }
         return $q->get()->getRowArray() ?: null;
     }
