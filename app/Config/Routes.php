@@ -32,7 +32,10 @@ $routes->get('/cart/hapus/(:segment)', 'Cart::hapus/$1');
 // =====================================================
 
 $routes->get('/checkout', 'Checkout::index', ['filter' => 'customerAuth']);
-$routes->post('/checkout/langsung', 'Checkout::langsung', ['filter' => 'customerAuth']);
+// POST publik: simpan pilihan ke session, lalu arahkan ke login bila belum login
+$routes->post('/checkout/langsung', 'Checkout::langsung');
+// GET: dipakai setelah login untuk melanjutkan checkout langsung
+$routes->get('/checkout/langsung', 'Checkout::langsungLanjut', ['filter' => 'customerAuth']);
 $routes->post('/checkout/simpan-customer', 'Checkout::simpanCustomer', ['filter' => 'customerAuth']);
 
 $routes->get('/checkout/fulfillment', 'Checkout::fulfillment', ['filter' => 'customerAuth']);

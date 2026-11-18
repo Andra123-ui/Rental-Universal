@@ -324,8 +324,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
             <?php if ($can['refund']): ?>
             <details class="form-box">
                 <summary class="btn btn-ghost btn-sm">Catat refund</summary>
-                <form method="post" action="<?= esc($base . '/payment', 'attr') ?>" class="form-grid"
-                    onsubmit="return confirm('Catat refund? Total terbayar akan berkurang.')">
+                <form method="post" action="<?= esc($base . '/payment', 'attr') ?>" class="form-grid" id="refundForm"
+                    onsubmit="return openRefundModal(this)">
                     <?= csrf_field() ?>
                     <input type="hidden" name="direction" value="OUT">
                     <div>
@@ -534,7 +534,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     <!-- ---------- Deposit ---------- -->
     <section data-pane="deposit">
         <?php
-        $ds = $depSummary ?? ['required'=>0,'held'=>0,'withheld'=>0,'refunded'=>0,'pending'=>0,'status'=>'NONE'];
+        
+$ds = $depSummary ?? ['required'=>0,'held'=>0,'withheld'=>0,'refunded'=>0,'pending'=>0,'status'=>'NONE','received_at'=>null,'refunded_at'=>null];
         $depStatusLabel = [
             'NONE'     => ['badge-off',  'Tidak ada deposit'],
             'PENDING'  => ['badge-warn', 'Menunggu pembayaran deposit'],
@@ -550,12 +551,20 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
             <dd><?= esc($rp($ds['required'])) ?></dd>
             <dt>Diterima</dt>
             <dd><?= esc($rp($ds['held'])) ?></dd>
+            <?php if (!empty($ds['received_at'])): ?>
+            <dt>Tanggal diterima</dt>
+            <dd><?= esc($dt($ds['received_at'])) ?></dd>
+            <?php endif; ?>
             <?php if ($ds['withheld'] > 0): ?>
             <dt>Dipotong (kerusakan/denda)</dt>
             <dd class="text-danger">- <?= esc($rp($ds['withheld'])) ?></dd>
             <?php endif; ?>
             <dt>Sudah dikembalikan</dt>
             <dd><?= esc($rp($ds['refunded'])) ?></dd>
+            <?php if (!empty($ds['refunded_at'])): ?>
+            <dt>Tanggal dikembalikan</dt>
+            <dd><?= esc($dt($ds['refunded_at'])) ?></dd>
+            <?php endif; ?>
             <dt class="strong">Belum dikembalikan</dt>
             <dd class="strong <?= $ds['pending'] > 0 ? 'text-danger' : '' ?>">
                 <?= esc($rp($ds['pending'])) ?>
@@ -575,7 +584,8 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
         </div>
         <?php elseif ($ds['status'] === 'REFUNDED'): ?>
         <div class="alert alert-success" style="margin-top:10px;">
-            Deposit sudah dikembalikan penuh.
+            Deposit sudah dikembalikan
+            penuh<?= !empty($ds['refunded_at']) ? ' pada <strong>' . esc($dt($ds['refunded_at'])) . '</strong>' : '' ?>.
         </div>
         <?php endif; ?>
 
@@ -938,7 +948,97 @@ $activeItems = array_values(array_filter($items, static fn ($i) => $i['status'] 
     </div>
 </div>
 
+<style>
+.rf-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, .55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px
+}
+
+.rf-overlay.show {
+    display: flex
+}
+
+.rf-box {
+    background: #fff;
+    border-radius: 14px;
+    max-width: 420px;
+    width: 100%;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .25)
+}
+
+.rf-box h3 {
+    margin: 0 0 8px;
+    font-size: 1.1rem
+}
+
+.rf-box p {
+    margin: 0;
+    color: #475569;
+    line-height: 1.6;
+    font-size: .92rem
+}
+
+.rf-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px
+}
+</style>
+
+<div class="rf-overlay" id="rfOverlay" role="dialog" aria-modal="true">
+    <div class="rf-box">
+        <h3 id="rfTitle">Catat refund?</h3>
+        <p id="rfText"></p>
+        <div class="rf-actions">
+            <button type="button" class="btn btn-ghost" id="rfCancel">Batal</button>
+            <button type="button" class="btn btn-primary" id="rfOk">Ya, simpan</button>
+        </div>
+    </div>
+</div>
+
 <script>
+var rfForm = null;
+
+function openRefundModal(form) {
+    if (form.dataset.confirmed === '1') {
+        return true;
+    }
+    rfForm = form;
+
+    var isDeposit = form.querySelector('[name=payment_type]').value === 'DEPOSIT';
+    var amount = parseInt(form.querySelector('[name=amount]').value || '0', 10);
+    var rp = 'Rp ' + amount.toLocaleString('id-ID');
+
+    document.getElementById('rfTitle').textContent = isDeposit ? 'Kembalikan deposit?' : 'Catat refund?';
+    document.getElementById('rfText').textContent = isDeposit ?
+        'Deposit ' + rp + ' akan dicatat sebagai sudah dikembalikan ke customer.' :
+        'Refund ' + rp + ' akan dicatat dan total terbayar akan berkurang.';
+
+    document.getElementById('rfOverlay').classList.add('show');
+    return false;
+}
+
+document.getElementById('rfCancel').addEventListener('click', function() {
+    document.getElementById('rfOverlay').classList.remove('show');
+});
+
+document.getElementById('rfOk').addEventListener('click', function() {
+    if (!rfForm) {
+        return;
+    }
+    rfForm.dataset.confirmed = '1';
+    document.getElementById('rfOverlay').classList.remove('show');
+    rfForm.submit();
+});
+
 function askCancel(form, hasPaid) {
     var msg = 'Alasan membatalkan booking ini:';
     if (hasPaid) {

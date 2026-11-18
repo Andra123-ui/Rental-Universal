@@ -50,65 +50,85 @@ class Checkout extends BaseController
     }
 
     public function langsung()
-    {
-        if (!$this->request->is('post')) {
-            return redirect()->to('/catalog');
-        }
-
-        $itemId   = (int) $this->request->getPost('catalog_item_id');
-        $branchId = (int) $this->request->getPost('branch_id') ?: null;
-        $qty      = max(1, (int) $this->request->getPost('qty'));
-        $startAt  = (string) $this->request->getPost('start_at');
-        $endAt    = (string) $this->request->getPost('end_at');
-
-        $product = (new CatalogItemModel())->find($itemId);
-        if (!$product) {
-            return redirect()->to('/catalog')->with('error', 'Item tidak ditemukan.');
-        }
-
-        // NORMALISASI WAKTU DI SINI
-        [$startAt, $endAt] = $this->normalizeDates($product, $startAt, $endAt);
-
-        if (!$itemId || strtotime($startAt) === false || strtotime($endAt) === false || strtotime($endAt) <= strtotime($startAt)) {
-            return redirect()->back()->with('error', 'Pilih cabang dan tanggal sewa terlebih dahulu.');
-        }
-
-        $avail = (new \App\Models\AvailabilityModel())
-            ->checkAvailability($itemId, $branchId, $startAt, $endAt, $qty);
-
-        if (($avail['status'] ?? '') === 'unavailable') {
-            return redirect()->back()->with('error', $avail['message'] ?? 'Item tidak tersedia pada jadwal yang dipilih.');
-        }
-        if (($avail['status'] ?? '') === 'limited' && $qty > $avail['available_units']) {
-            $sisa = (int) floor($avail['available_units']);
-            return redirect()->back()->with('error', "Stok tidak mencukupi. Tersisa {$sisa} unit untuk jadwal ini.");
-        }
-
-        $branch = $branchId
-            ? \Config\Database::connect()->table('branches')->where('id', $branchId)->get()->getRowArray()
-            : null;
-
-        $key = $itemId . '_' . md5($branchId . $startAt . $endAt);
-
-        session()->set(self::BUY_NOW_KEY, [
-            $key => [
-                'catalog_item_id' => $itemId,
-                'qty'             => $qty,
-                'branch_id'       => $branchId,
-                'start_at'        => $startAt,
-                'end_at'          => $endAt,
-                'branch_name'     => $branch['name'] ?? null,
-                'branch_address'  => $branch['address'] ?? null,
-                'branch_phone'    => $branch['phone'] ?? null,
-            ],
-        ]);
-
-        $co = session()->get(self::CHECKOUT_KEY) ?? [];
-        unset($co['fulfillment_items']);
-        session()->set(self::CHECKOUT_KEY, $co);
-
-        return redirect()->to('/checkout');
+{
+    if (!$this->request->is('post')) {
+        return redirect()->to('/catalog');
     }
+
+    $itemId   = (int) $this->request->getPost('catalog_item_id');
+    $branchId = (int) $this->request->getPost('branch_id') ?: null;
+    $qty      = max(1, (int) $this->request->getPost('qty'));
+    $startAt  = (string) $this->request->getPost('start_at');
+    $endAt    = (string) $this->request->getPost('end_at');
+
+    $product = (new CatalogItemModel())->find($itemId);
+    if (!$product) {
+        return redirect()->to('/catalog')->with('error', 'Item tidak ditemukan.');
+    }
+
+    // NORMALISASI WAKTU DI SINI
+    [$startAt, $endAt] = $this->normalizeDates($product, $startAt, $endAt);
+
+    if (!$itemId || strtotime($startAt) === false || strtotime($endAt) === false || strtotime($endAt) <= strtotime($startAt)) {
+        return redirect()->back()->with('error', 'Pilih cabang dan tanggal sewa terlebih dahulu.');
+    }
+
+    $avail = (new \App\Models\AvailabilityModel())
+        ->checkAvailability($itemId, $branchId, $startAt, $endAt, $qty);
+
+    if (($avail['status'] ?? '') === 'unavailable') {
+        return redirect()->back()->with('error', $avail['message'] ?? 'Item tidak tersedia pada jadwal yang dipilih.');
+    }
+    if (($avail['status'] ?? '') === 'limited' && $qty > $avail['available_units']) {
+        $sisa = (int) floor($avail['available_units']);
+        return redirect()->back()->with('error', "Stok tidak mencukupi. Tersisa {$sisa} unit untuk jadwal ini.");
+    }
+
+    $branch = $branchId
+        ? \Config\Database::connect()->table('branches')->where('id', $branchId)->get()->getRowArray()
+        : null;
+
+    $key = $itemId . '_' . md5($branchId . $startAt . $endAt);
+
+    session()->set(self::BUY_NOW_KEY, [
+        $key => [
+            'catalog_item_id' => $itemId,
+            'qty'             => $qty,
+            'branch_id'       => $branchId,
+            'start_at'        => $startAt,
+            'end_at'          => $endAt,
+            'branch_name'     => $branch['name'] ?? null,
+            'branch_address'  => $branch['address'] ?? null,
+            'branch_phone'    => $branch['phone'] ?? null,
+        ],
+    ]);
+
+    $co = session()->get(self::CHECKOUT_KEY) ?? [];
+    unset($co['fulfillment_items']);
+    session()->set(self::CHECKOUT_KEY, $co);
+
+    // Belum login: arahkan ke login, setelah OTP kembali ke /checkout
+    if (!session()->get('customer_logged_in')) {
+        session()->set('customer_login_return_url', '/checkout');
+        return redirect()->to(site_url('account/login'));
+    }
+
+    return redirect()->to('/checkout');
+}
+
+/**
+ * Safety net: kalau ada yang membuka GET /checkout/langsung
+ * (refresh / bookmark), lanjutkan ke checkout bila cart ada.
+ */
+public function langsungLanjut()
+{
+    if (empty(session()->get(self::BUY_NOW_KEY))) {
+        return redirect()->to('/catalog')
+            ->with('error', 'Pilihan checkout tidak ditemukan. Silakan pilih ulang.');
+    }
+
+    return redirect()->to('/checkout');
+}
 
     public function index()
     {

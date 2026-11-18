@@ -28,38 +28,49 @@ class BookingMoney
     }
 
     public function recalc(int $id): void
-    {
-        $b = $this->db->table('bookings')->where('id', $id)->get()->getRowArray();
-        $this->ensureLegacy($b);
+{
+    $b = $this->db->table('bookings')->where('id', $id)->get()->getRowArray();
+    $this->ensureLegacy($b);
 
-        $charge = (float) ($this->db->table('booking_charges')->selectSum('amount', 's')
-            ->where('booking_id', $id)->whereNotIn('status', self::CHARGE_OFF)->get()->getRow('s') ?? 0);
+    $charge = (float) ($this->db->table('booking_charges')->selectSum('amount', 's')
+        ->where('booking_id', $id)->whereNotIn('status', self::CHARGE_OFF)->get()->getRow('s') ?? 0);
 
-        $in = (float) ($this->db->table('payments')->selectSum('amount', 's')
-            ->where('booking_id', $id)->where('direction', 'IN')->where('status', 'PAID')->get()->getRow('s') ?? 0);
-        $out = (float) ($this->db->table('payments')->selectSum('amount', 's')
-            ->where('booking_id', $id)->where('direction', 'OUT')->where('status', 'PAID')->get()->getRow('s') ?? 0);
+    $in = (float) ($this->db->table('payments')->selectSum('amount', 's')
+        ->where('booking_id', $id)->where('direction', 'IN')->where('status', 'PAID')->get()->getRow('s') ?? 0);
+    $out = (float) ($this->db->table('payments')->selectSum('amount', 's')
+        ->where('booking_id', $id)->where('direction', 'OUT')->where('status', 'PAID')->get()->getRow('s') ?? 0);
 
-        $paid    = max(0.0, $in - $out);
-        $grand   = (float) $b['subtotal'] - (float) $b['discount_total'] + $charge + (float) $b['deposit_total'];
-        $balance = max(0.0, $grand - $paid);
+    // Refund yang jenisnya pengembalian deposit
+    $depRefund = (float) ($this->db->table('payments')->selectSum('amount', 's')
+        ->where('booking_id', $id)->where('direction', 'OUT')->where('status', 'PAID')
+        ->where('payment_type', 'DEPOSIT')->get()->getRow('s') ?? 0);
 
-        if ($paid <= 0) {
-            $ps = ($in > 0 && $out > 0) ? 'REFUNDED' : 'UNPAID';
-        } elseif ($paid + 0.009 >= $grand) {
-            $ps = 'PAID';
-        } else {
-            $ps = 'PARTIAL';
-        }
+    $paid  = max(0.0, $in - $out);
+    $grand = (float) $b['subtotal'] - (float) $b['discount_total'] + $charge + (float) $b['deposit_total'];
 
-        $this->db->table('bookings')->where('id', $id)->update([
-            'charge_total'   => $charge,
-            'grand_total'    => $grand,
-            'paid_total'     => $paid,
-            'balance_due'    => $balance,
-            'payment_status' => $ps,
-        ]);
+    // Deposit yang sudah dikembalikan tidak lagi menjadi kewajiban customer.
+    // Dibatasi sebesar deposit_total supaya salah input tidak menutupi tagihan sewa.
+    $depRefund = min($depRefund, (float) $b['deposit_total']);
+    $due       = max(0.0, $grand - $depRefund);
+
+    $balance = max(0.0, $due - $paid);
+
+    if ($paid <= 0) {
+        $ps = ($in > 0 && $out > 0) ? 'REFUNDED' : 'UNPAID';
+    } elseif ($paid + 0.009 >= $due) {
+        $ps = 'PAID';
+    } else {
+        $ps = 'PARTIAL';
     }
+
+    $this->db->table('bookings')->where('id', $id)->update([
+        'charge_total'   => $charge,
+        'grand_total'    => $grand,
+        'paid_total'     => $paid,
+        'balance_due'    => $balance,
+        'payment_status' => $ps,
+    ]);
+}
 
     /**
      * Booking lama menyimpan paid_total tanpa baris di tabel payments.

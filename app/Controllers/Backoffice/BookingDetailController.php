@@ -100,16 +100,23 @@ class BookingDetailController extends BaseController
 
         $depIn  = 0.0;
         $depOut = 0.0;
-        foreach ($depositPayments as $dp) {
-            if (strtoupper((string) $dp['status']) !== 'PAID') {
-                continue;
-            }
-            if (strtoupper((string) $dp['direction']) === 'OUT') {
-                $depOut += (float) $dp['amount'];
-            } else {
-                $depIn += (float) $dp['amount'];
-            }
+        $depReceivedAt = null;
+        $depRefundedAt = null;
+    foreach ($depositPayments as $dp) {
+    if (strtoupper((string) $dp['status']) !== 'PAID') {
+        continue;
+    }
+    $when = $dp['paid_at'] ?: $dp['created_at'];
+    if (strtoupper((string) $dp['direction']) === 'OUT') {
+        $depOut += (float) $dp['amount'];
+        $depRefundedAt = $when; // urut ASC, jadi yang terakhir = refund terbaru
+    } else {
+        $depIn += (float) $dp['amount'];
+        if ($depReceivedAt === null) {
+            $depReceivedAt = $when; // penerimaan pertama
         }
+    }
+}
 
         // Potongan deposit dihitung dari kerusakan yang sudah dibebankan
         $depWithheld = (float) ($db->table('damages')
@@ -136,13 +143,15 @@ class BookingDetailController extends BaseController
         }
 
         $depSummary = [
-            'required' => $depRequired,
-            'held'     => $depIn,
-            'withheld' => $depWithheld,
-            'refunded' => $depRefunded,
-            'pending'  => $depPending,
-            'status'   => $depStatus,
-        ];
+    'required'    => $depRequired,
+    'held'        => $depIn,
+    'withheld'    => $depWithheld,
+    'refunded'    => $depRefunded,
+    'pending'     => $depPending,
+    'status'      => $depStatus,
+    'received_at' => $depReceivedAt,
+    'refunded_at' => $depRefundedAt,
+];
 
         $deposit = null; // kompatibilitas view lama — tidak dipakai lagi
 
